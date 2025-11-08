@@ -1,134 +1,180 @@
 export const metadata = {
-  title: "Terms • TonStars",
-  description: "Terms of Use / Условия использования",
+  title: "Terms of Use / Условия использования — TonStars",
+  description: "Terms of Use and Условия использования for TonStars",
 };
 
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 text-neutral-200">
-      <h1 className="text-3xl font-semibold mb-6">Terms of Use / Условия использования</h1>
+      <h1 className="text-3xl font-semibold mb-6">
+        Terms of Use / Условия использования
+      </h1>
 
-      {/* RU */}
+      {/* --- Russian Version --- */}
       <section className="mb-12">
         <h2 className="text-2xl font-semibold mb-3">Условия использования (RU)</h2>
         <p className="opacity-80 mb-4">Последнее обновление: 01.06.2025</p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">1. Описание платформы</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">1. Введение</h3>
         <p className="mb-3">
-          TonStars — интерфейс для покупки Telegram Stars за TON. Операции совершаются через
-          смарт-контракты/платёжные провайдеры в сети TON. Мы не храним средства, сделки
-          необратимы после подтверждения в сети.
+          Эти Условия регулируют доступ и использование платформы{" "}
+          <strong>TonStars</strong>. Если вы не согласны — не используйте сервис.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">2. Доступ и возраст</h3>
-        <p className="mb-3">Сервисом могут пользоваться лица 18+. Используя Сервис, вы подтверждаете это.</p>
+        <h3 className="text-xl font-semibold mt-6 mb-2">2. Описание платформы</h3>
+        <p className="mb-3">
+          TonStars — независимая платформа для покупки{" "}
+          <strong>Telegram Stars</strong> за <strong>TON</strong>. Операции
+          происходят в сети TON, средства не хранятся у Платформы.
+        </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">3. Ответственность пользователя</h3>
-        <ul className="list-disc pl-6 space-y-2">
-          <li>Храните приватные ключи/сид-фразы в безопасности. Мы не восстанавливаем кошельки.</li>
-          <li>Проверяйте получателя и сумму перед подтверждением транзакции.</li>
-          <li>Соблюдайте местное законодательство и налоговые обязанности.</li>
-          <li>Запрещены незаконная деятельность, мошенничество, нарушение IP-прав, манипулирование рынком и т.д.</li>
+        <h3 className="text-xl font-semibold mt-6 mb-2">3. Требования</h3>
+        <ul className="list-disc pl-6 space-y-2 mb-3">
+          <li>18+ лет;</li>
+          <li>ответственность за безопасность устройств и кошельков;</li>
+          <li>соблюдение законов вашей юрисдикции.</li>
         </ul>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">4. Комиссии</h3>
-        <ul className="list-disc pl-6 space-y-2">
-          <li>Сетевые комиссии TON оплачиваются пользователем и не контролируются нами.</li>
-          <li>Платформенные сборы (если применимы) отображаются до подтверждения и не возвращаются.</li>
+        <h3 className="text-xl font-semibold mt-6 mb-2">4. Обязанности пользователя</h3>
+        <ul className="list-disc pl-6 space-y-2 mb-3">
+          <li>не использовать сервис для незаконной деятельности;</li>
+          <li>не распространять вредоносное ПО и не пытаться взломать сервис;</li>
+          <li>не совершать мошенничество и манипуляции;</li>
+          <li>не ухудшать работу платформы.</li>
         </ul>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">5. Отказ от гарантий</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">5. Транзакции и риски</h3>
         <p className="mb-3">
-          Сервис предоставляется «как есть». Мы не гарантируем бесперебойность, отсутствие уязвимостей
-          смарт-контрактов или рост стоимости цифровых активов.
+          Операции в TON необратимы. Платформа не может отменить/вернуть платёж
+          после подтверждения. Проверяйте адреса и суммы до оплаты.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">6. Ограничение ответственности</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">6. Комиссии</h3>
         <p className="mb-3">
-          В пределах, допустимых законом, мы не несем ответственности за косвенные/случайные убытки
-          (потерю прибыли, данных и т.п.). Совокупная ответственность ограничена уплаченными нам
-          комиссиями за последние 12 месяцев.
+          Цена и комиссия отображаются до оплаты. Возможны сетевые комиссии TON.
+          Комиссии невозвратны.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">7. Прекращение доступа</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">7. Ограничение ответственности</h3>
         <p className="mb-3">
-          Мы можем приостановить или прекратить доступ при нарушении Условий. Вы можете перестать
-          пользоваться сервисом в любой момент; владение средствами в кошельке не затрагивается.
+          Сервис предоставляется «как есть». Мы не гарантируем бесперебойность и
+          отсутствие ошибок. Не отвечаем за прямые/косвенные убытки, включая
+          потерю прибыли/данных.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">8. Изменения</h3>
-        <p className="mb-3">Мы можем обновлять Условия. Новая редакция публикуется на этой странице.</p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">9. Право и споры</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">8. Возмещение убытков</h3>
         <p className="mb-3">
-          Применимое право и порядок разрешения споров определяется юрисдикцией оператора сервиса.
-          По возможности споры подлежат разрешению через арбитраж, если это не запрещено законом.
+          Пользователь возмещает убытки, вызванные нарушением Условий или закона.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">10. Контакты</h3>
-        <p>support@tonstars.io</p>
+        <h3 className="text-xl font-semibold mt-6 mb-2">9. Прекращение доступа</h3>
+        <p className="mb-3">
+          Мы можем ограничить доступ без уведомления при нарушениях.
+        </p>
+
+        <h3 className="text-xl font-semibold mt-6 mb-2">10. Изменения</h3>
+        <p className="mb-3">
+          Обновления публикуются на этой странице. Дата указана выше.
+        </p>
+
+        <h3 className="text-xl font-semibold mt-6 mb-2">11. Применимое право</h3>
+        <p className="mb-3">
+          Применяется право юрисдикции владельца Платформы. Споры — в компетентном
+          суде по месту регистрации владельца.
+        </p>
+
+        <h3 className="text-xl font-semibold mt-6 mb-2">12. Контакты</h3>
+        <p>
+          Telegram:{" "}
+          <a href="https://t.me/tonstars_support">@tonstars_support</a> • Сайт:{" "}
+          <a href="https://tonstars.io/">tonstars.io</a>
+        </p>
       </section>
 
       <hr className="border-neutral-700 my-10" />
 
-      {/* EN */}
+      {/* --- English Version --- */}
       <section>
         <h2 className="text-2xl font-semibold mb-3">Terms of Use (EN)</h2>
         <p className="opacity-80 mb-4">Last updated: 01 Jun 2025</p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">1. Platform</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">1. Introduction</h3>
         <p className="mb-3">
-          TonStars is an interface to buy Telegram Stars with TON. Transactions occur via
-          smart contracts/payment providers on the TON network. We do not hold funds; on-chain
-          transactions are final once confirmed.
+          These Terms govern access to and use of the <strong>TonStars</strong>{" "}
+          platform. If you do not agree — do not use the service.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">2. Access & Age</h3>
-        <p className="mb-3">You must be at least 18 years old to use the Service.</p>
+        <h3 className="text-xl font-semibold mt-6 mb-2">2. Platform Description</h3>
+        <p className="mb-3">
+          TonStars is an independent platform for purchasing{" "}
+          <strong>Telegram Stars</strong> with <strong>TON</strong>. Transactions
+          occur on the TON network; funds are not held by the Platform.
+        </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">3. User Responsibilities</h3>
-        <ul className="list-disc pl-6 space-y-2">
-          <li>Keep private keys/seed phrases secure. We cannot recover wallets.</li>
-          <li>Verify recipient and amount before confirming a transaction.</li>
-          <li>Comply with your local laws and tax obligations.</li>
-          <li>No illegal activity, fraud, IP infringement, market manipulation, etc.</li>
+        <h3 className="text-xl font-semibold mt-6 mb-2">3. Requirements</h3>
+        <ul className="list-disc pl-6 space-y-2 mb-3">
+          <li>18+ years old;</li>
+          <li>responsible for the security of your devices and wallets;</li>
+          <li>compliance with the laws of your jurisdiction.</li>
         </ul>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">4. Fees</h3>
-        <ul className="list-disc pl-6 space-y-2">
-          <li>TON network fees are paid by the user and are outside our control.</li>
-          <li>Any platform fees (if applicable) are shown pre-confirmation and are non-refundable.</li>
+        <h3 className="text-xl font-semibold mt-6 mb-2">4. User Obligations</h3>
+        <ul className="list-disc pl-6 space-y-2 mb-3">
+          <li>do not use the service for illegal activities;</li>
+          <li>do not distribute malware or attempt to hack the service;</li>
+          <li>do not engage in fraud or manipulation;</li>
+          <li>do not impair the operation of the platform.</li>
         </ul>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">5. No Warranty</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">5. Transactions and Risks</h3>
         <p className="mb-3">
-          The Service is provided “as is”. We don’t guarantee uninterrupted operation, absence of
-          smart-contract vulnerabilities, or any asset value.
+          Transactions on TON are irreversible. The Platform cannot cancel or
+          refund payments after confirmation. Double-check addresses and amounts
+          before paying.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">6. Liability</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">6. Fees</h3>
         <p className="mb-3">
-          To the fullest extent permitted by law, we are not liable for indirect/incidental damages.
-          Aggregate liability is limited to fees paid to us in the prior 12 months.
+          The price and fee are displayed before payment. TON network fees may
+          apply. Fees are non-refundable.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">7. Termination</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">7. Limitation of Liability</h3>
         <p className="mb-3">
-          We may suspend/terminate access for violations. You may stop using the Service at any time;
-          assets in your wallet remain under your control.
+          The service is provided “as is”. We do not guarantee uninterrupted or
+          error-free operation. We are not liable for direct or indirect losses,
+          including loss of profit or data.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">8. Changes</h3>
-        <p className="mb-3">We may update these Terms. The current version is posted on this page.</p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">9. Governing Law & Disputes</h3>
+        <h3 className="text-xl font-semibold mt-6 mb-2">8. Indemnification</h3>
         <p className="mb-3">
-          Governing law and dispute venue follow the operator’s jurisdiction. Where allowed, disputes
-          shall be resolved by binding arbitration.
+          The user shall indemnify the Platform for damages caused by violations
+          of these Terms or the law.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">10. Contact</h3>
-        <p>support@tonstars.io</p>
+        <h3 className="text-xl font-semibold mt-6 mb-2">9. Access Termination</h3>
+        <p className="mb-3">
+          We may restrict access without notice in case of violations.
+        </p>
+
+        <h3 className="text-xl font-semibold mt-6 mb-2">10. Changes</h3>
+        <p className="mb-3">
+          Updates are published on this page. The date above shows the latest
+          revision.
+        </p>
+
+        <h3 className="text-xl font-semibold mt-6 mb-2">11. Governing Law</h3>
+        <p className="mb-3">
+          The law of the Platform owner’s jurisdiction applies. Disputes are
+          resolved by the competent court at the owner’s place of registration.
+        </p>
+
+        <h3 className="text-xl font-semibold mt-6 mb-2">12. Contacts</h3>
+        <p>
+          Telegram:{" "}
+          <a href="https://t.me/tonstars_support">@tonstars_support</a> •
+          Website: <a href="https://tonstars.io/">tonstars.io</a>
+        </p>
       </section>
     </main>
   );
