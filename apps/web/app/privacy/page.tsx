@@ -1,13 +1,13 @@
 export const metadata = {
-  title: "Privacy Policy / Политика конфиденциальности — TonStars",
-  description: "Privacy Policy and Политика конфиденциальности for TonStars",
+  title: "Политика конфиденциальности / Privacy Policy — TonStars",
+  description: "Политика конфиденциальности / Privacy Policy for TonStars",
 };
 
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 text-neutral-200">
       <h1 className="text-3xl font-semibold mb-6">
-        Privacy Policy / Политика конфиденциальности
+        Политика конфиденциальности / Privacy Policy
       </h1>
 
       {/* --- Russian Version --- */}
