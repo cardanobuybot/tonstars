@@ -1,0 +1,9 @@
+:root { color-scheme: dark; }
+html,body {
+  margin: 0; height: 100%;
+  background: #0a0f1a; color: #e5edf5;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu;
+}
+* { box-sizing: border-box; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; }
