@@ -1,13 +1,13 @@
 export const metadata = {
-  title: "Terms of Use / Условия использования — TonStars",
-  description: "Terms of Use and Условия использования for TonStars",
+  title: "Условия использования / Terms of Use — TonStars",
+  description: "Условия использования / Terms of Use for TonStars",
 };
 
 export default function TermsPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 text-neutral-200">
       <h1 className="text-3xl font-semibold mb-6">
-        Terms of Use / Условия использования
+        Условия использования / Terms of Use
       </h1>
 
       {/* --- Russian Version --- */}
