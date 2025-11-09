@@ -3,19 +3,27 @@
 import React from 'react';
 import {
   TonConnectUIProvider,
-  useTonConnectUI,
-  useTonWallet
+  useTonConnectUI as useTonConnectUIBase,
+  useTonWallet as useTonWalletBase,
 } from '@tonconnect/ui-react';
 
-export { useTonConnectUI, useTonWallet };
+type Props = {
+  children: React.ReactNode;
+  lang: 'ru' | 'en';
+};
 
-export default function TonConnectProvider({ children }: { children: React.ReactNode }) {
+export default function TonConnectProvider({ children, lang }: Props) {
   return (
     <TonConnectUIProvider
       manifestUrl="https://tonstars.io/.well-known/tonconnect-manifest.json"
-      actionsConfiguration={{ twaReturnUrl: 'https://tonstars.io' }}
+      language={lang}
+      uiPreferences={{ theme: 'DARK' }}
     >
       {children}
     </TonConnectUIProvider>
   );
 }
+
+// Реэкспорт хуков, чтобы импортировать из одного места
+export const useTonConnectUI = useTonConnectUIBase;
+export const useTonWallet = useTonWalletBase;
