@@ -4,10 +4,8 @@ import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useTonConnectUI, useTonWallet } from './providers/TonConnectProvider';
 
-// 1 STAR = 0.0002 TON
 const STAR_TON_RATE = 0.0002;
 
-// Примитивная локализация (RU/EN)
 const t = (lang: 'ru' | 'en') =>
   lang === 'ru'
     ? {
@@ -17,7 +15,7 @@ const t = (lang: 'ru' | 'en') =>
         cardTitle: 'Купить Stars',
         usernameLabel: '@Telegram username',
         usernameHintOk: (u: string) => `Будет отправлено @${u}`,
-        usernameHintBad: 'Допустимы только латиница, цифры и _',
+        usernameHintBad: 'Допустимы только латиница, цифры и _ (5–32)',
         amountLabel: 'Сумма Stars',
         amountHintOk: (n: number) => `OK — ${n} Stars`,
         amountHintBad: 'Только целые числа ≥ 1',
@@ -37,7 +35,7 @@ const t = (lang: 'ru' | 'en') =>
         cardTitle: 'Buy Stars',
         usernameLabel: '@Telegram username',
         usernameHintOk: (u: string) => `Will be sent to @${u}`,
-        usernameHintBad: 'Only letters, digits and underscore are allowed',
+        usernameHintBad: 'Only letters, digits, _ (5–32)',
         amountLabel: 'Stars amount',
         amountHintOk: (n: number) => `OK — ${n} Stars`,
         amountHintBad: 'Integers only, ≥ 1',
@@ -51,7 +49,6 @@ const t = (lang: 'ru' | 'en') =>
           `We will send ${n} Stars to @${u} for ≈ ${ton} TON`,
       };
 
-// очень простая «переключалка»: по умолчанию RU
 function useLang(): ['ru' | 'en', (l: 'ru' | 'en') => void] {
   const [lang, setLang] = useState<'ru' | 'en'>(
     (typeof window !== 'undefined' &&
@@ -71,38 +68,34 @@ export default function Page() {
   const [username, setUsername] = useState('');
   const [rawAmount, setRawAmount] = useState('100');
 
-  // TON Connect
   const [tonConnectUI] = useTonConnectUI();
-  const wallet = useTonWallet(); // null, если не подключен
+  const wallet = useTonWallet();
+  const isConnected = !!wallet?.account?.address; // ← ключевая проверка
 
-  // Валидация username: только латиница/цифры/_ и 5..32 символов (как у Telegram)
+  // username 5..32, латиница/цифры/_
   const usernameValid = useMemo(() => {
     const u = username.trim();
-    if (!u) return false;
     if (u.length < 5 || u.length > 32) return false;
     return /^[a-zA-Z0-9_]+$/.test(u);
   }, [username]);
 
-  // Валидация количества: целое ≥ 1, без ведущих нулей
+  // целое ≥ 1, без ведущих нулей
   const amount = useMemo(() => {
     const cleaned = rawAmount.replace(/[^0-9]/g, '');
-    if (cleaned === '') return NaN;
-    if (/^0\d+/.test(cleaned)) return NaN;
+    if (cleaned === '' || /^0\d+/.test(cleaned)) return NaN;
     const num = Number(cleaned);
     if (!Number.isInteger(num) || num < 1) return NaN;
     return num;
   }, [rawAmount]);
 
-  const tonToPay = useMemo(() => {
-    if (!Number.isFinite(amount)) return 0;
-    return Number((amount * STAR_TON_RATE).toFixed(4));
-  }, [amount]);
+  const tonToPay = useMemo(
+    () => (Number.isFinite(amount) ? Number((Number(amount) * STAR_TON_RATE).toFixed(4)) : 0),
+    [amount]
+  );
 
-  const canSubmit = wallet && usernameValid && Number.isFinite(amount);
-
-  const onSubmit = async () => {
-    // если кошелёк НЕ подключён — открываем модал и выходим
-    if (!wallet) {
+  const onSubmit = () => {
+    // если не подключен — открываем модал и выходим
+    if (!isConnected) {
       tonConnectUI.openModal();
       return;
     }
@@ -111,26 +104,24 @@ export default function Page() {
     const ok = window.confirm(
       `${tr.confirmTitle}\n\n${tr.confirmText(
         username.trim(),
-        amount as number,
+        Number(amount),
         tonToPay.toFixed(4)
       )}`
     );
     if (!ok) return;
 
-    // здесь дальше твой реальный flow покупки
-    // TODO: создать ордер на backend, получить payload, tonConnectUI.sendTransaction(...)
-    alert('Демо: транзакция ещё не реализована (backend/payload).');
+    // TODO: тут реальный flow (backend + tonConnectUI.sendTransaction)
+    alert('Демо: покупка будет реализована после backend.');
   };
 
+  // короткий адрес в хедере
+  const shortAddr = wallet?.account?.address
+    ? `${wallet.account.address.slice(0, 4)}…${wallet.account.address.slice(-4)}`
+    : '';
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: '#0a0f1a',
-        color: '#e5edf5',
-      }}
-    >
-      {/* Хедер */}
+    <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#e5edf5' }}>
+      {/* Header */}
       <header
         style={{
           display: 'flex',
@@ -141,13 +132,7 @@ export default function Page() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Image
-            src="/icon-512.png"
-            alt="TonStars"
-            width={40}
-            height={40}
-            style={{ borderRadius: 8 }}
-          />
+          <Image src="/icon-512.png" alt="TonStars" width={40} height={40} style={{ borderRadius: 8 }} />
           <div style={{ fontWeight: 700, fontSize: 20 }}>TonStars</div>
         </div>
 
@@ -171,36 +156,27 @@ export default function Page() {
             onClick={() => tonConnectUI.openModal()}
             style={{
               padding: '10px 16px',
-              background:
-                'linear-gradient(90deg, #1ea0ff 0%, #00c2b8 100%)',
+              background: 'linear-gradient(90deg, #1ea0ff 0%, #00c2b8 100%)',
               border: 'none',
               borderRadius: 12,
               color: '#0a0f1a',
               fontWeight: 700,
             }}
           >
-            {lang === 'ru' ? 'Connect Wallet' : 'Connect Wallet'}
+            {isConnected ? shortAddr : (lang === 'ru' ? 'Подключить' : 'Connect') + ' Wallet'}
           </button>
         </div>
       </header>
 
-      {/* Герой */}
+      {/* Hero */}
       <section style={{ padding: '12px 20px 0' }}>
-        <h1
-          style={{
-            fontSize: 34,
-            lineHeight: 1.15,
-            margin: 0,
-            fontWeight: 800,
-          }}
-        >
-          {tr.title1} <br />
-          {tr.title2}
+        <h1 style={{ fontSize: 34, lineHeight: 1.15, margin: 0, fontWeight: 800 }}>
+          {tr.title1} <br /> {tr.title2}
         </h1>
         <p style={{ opacity: 0.7, marginTop: 10 }}>{tr.tagline}</p>
       </section>
 
-      {/* Карточка покупки */}
+      {/* Card */}
       <main style={{ padding: 20 }}>
         <div
           style={{
@@ -213,22 +189,10 @@ export default function Page() {
             boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
           }}
         >
-          <div
-            style={{
-              fontSize: 22,
-              fontWeight: 800,
-              marginBottom: 10,
-            }}
-          >
-            {tr.cardTitle}
-          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 10 }}>{tr.cardTitle}</div>
 
-          {/* Username */}
-          <label
-            style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
-          >
-            {tr.usernameLabel}
-          </label>
+          {/* username */}
+          <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{tr.usernameLabel}</label>
           <input
             inputMode="latin"
             autoCapitalize="off"
@@ -242,11 +206,7 @@ export default function Page() {
               background: '#0a101c',
               color: '#e5edf5',
               border: `1px solid ${
-                username.length === 0
-                  ? '#22304a'
-                  : usernameValid
-                  ? '#2bde73'
-                  : '#e86868'
+                username.length === 0 ? '#22304a' : usernameValid ? '#2bde73' : '#e86868'
               }`,
               borderRadius: 12,
               padding: '14px 16px',
@@ -257,54 +217,31 @@ export default function Page() {
             style={{
               fontSize: 12,
               marginTop: 6,
-              color:
-                username.length === 0
-                  ? '#90a0bf'
-                  : usernameValid
-                  ? '#2bde73'
-                  : '#e86868',
+              color: username.length === 0 ? '#90a0bf' : usernameValid ? '#2bde73' : '#e86868',
             }}
           >
-            {username.length === 0
-              ? ' '
-              : usernameValid
-              ? tr.usernameHintOk(username.trim())
-              : tr.usernameHintBad}
+            {username.length === 0 ? ' ' : usernameValid ? tr.usernameHintOk(username.trim()) : tr.usernameHintBad}
           </div>
 
-          {/* Amount */}
+          {/* amount */}
           <div style={{ height: 12 }} />
-          <label
-            style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
-          >
-            {tr.amountLabel}
-          </label>
+          <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{tr.amountLabel}</label>
           <input
             inputMode="numeric"
             pattern="[0-9]*"
             value={rawAmount}
             onChange={(e) => setRawAmount(e.target.value)}
             onBlur={() => {
-              // чистим ввод
-              const cleaned = rawAmount.replace(/[^0-9]/g, '');
-              if (cleaned === '' || /^0\d+/.test(cleaned)) {
-                setRawAmount(''); // заставит показать ошибку
-              } else {
-                setRawAmount(String(Number(cleaned)));
-              }
+              const c = rawAmount.replace(/[^0-9]/g, '');
+              if (c === '' || /^0\d+/.test(c)) setRawAmount('');
+              else setRawAmount(String(Number(c)));
             }}
             placeholder="100"
             style={{
               width: '100%',
               background: '#0a101c',
               color: '#e5edf5',
-              border: `1px solid ${
-                rawAmount.length === 0
-                  ? '#22304a'
-                  : Number.isFinite(amount)
-                  ? '#2bde73'
-                  : '#e86868'
-              }`,
+              border: `1px solid ${rawAmount.length === 0 ? '#22304a' : Number.isFinite(amount) ? '#2bde73' : '#e86868'}`,
               borderRadius: 12,
               padding: '14px 16px',
               outline: 'none',
@@ -314,40 +251,23 @@ export default function Page() {
             style={{
               fontSize: 12,
               marginTop: 6,
-              color:
-                rawAmount.length === 0
-                  ? '#90a0bf'
-                  : Number.isFinite(amount)
-                  ? '#2bde73'
-                  : '#e86868',
+              color: rawAmount.length === 0 ? '#90a0bf' : Number.isFinite(amount) ? '#2bde73' : '#e86868',
             }}
           >
-            {rawAmount.length === 0
-              ? ' '
-              : Number.isFinite(amount)
-              ? tr.amountHintOk(Number(amount))
-              : tr.amountHintBad}
+            {rawAmount.length === 0 ? ' ' : Number.isFinite(amount) ? tr.amountHintOk(Number(amount)) : tr.amountHintBad}
           </div>
 
-          {/* Сумма TON */}
+          {/* total */}
           <div style={{ height: 16 }} />
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontWeight: 700,
-            }}
-          >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700 }}>
             <span>{tr.payLabel}</span>
             <span>≈ {tonToPay.toFixed(4)} TON</span>
           </div>
 
-          {/* Кнопка */}
+          {/* CTA */}
           <div style={{ height: 14 }} />
           <button
             onClick={onSubmit}
-            disabled={!wallet && !usernameValid && !Number.isFinite(amount)}
             style={{
               width: '100%',
               padding: '14px 16px',
@@ -355,18 +275,16 @@ export default function Page() {
               borderRadius: 14,
               fontWeight: 800,
               color: '#0a0f1a',
-              background:
-                'linear-gradient(90deg, #1ea0ff 0%, #00c2b8 100%)',
-              opacity: canSubmit ? 1 : 1, // кнопка активна, но логика внутри решает
+              background: 'linear-gradient(90deg, #1ea0ff 0%, #00c2b8 100%)',
               cursor: 'pointer',
             }}
           >
-            {wallet ? tr.buy : tr.connect}
+            {isConnected ? tr.buy : tr.connect}
           </button>
         </div>
       </main>
 
-      {/* Футер */}
+      {/* Footer */}
       <footer
         style={{
           maxWidth: 720,
