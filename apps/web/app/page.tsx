@@ -237,6 +237,14 @@ export default function Page() {
     <a href="/privacy" aria-label="Политика конфиденциальности">Политика</a>
     <a href="/terms" aria-label="Условия использования">Условия</a>
   </div>
+        <div style={{ 
+    textAlign: 'center',
+    marginTop: 8,
+    opacity: 0.6,
+    fontSize: 14 
+  }}>
+    © 2025 TonStars. All rights reserved.
+  </div>
 </footer>
     </div>
   );
