@@ -3,28 +3,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 
-// 1 STAR = 0.0002 TON (пример: 1000 → 0.2 TON)
 const STAR_TON_RATE = 0.0002;
 
-// ---------- helpers ----------
 function formatTon(v: number) {
   if (!isFinite(v)) return '0.0000';
   return v.toFixed(4);
 }
 
 async function fetchTonBalance(address: string): Promise<number> {
-  // TonAPI принимает «дружественный» адрес вида EQ...
   const r = await fetch(`https://tonapi.io/v2/accounts/${address}`, {
     cache: 'no-store',
   });
   if (!r.ok) throw new Error('Balance request failed');
   const data = await r.json();
-  // balance возвращается в nanotons (1e9 = 1 TON)
   const nano: number = Number(data.balance ?? 0);
   return nano / 1e9;
 }
 
-// Разрешённые символы для Telegram username (без @)
 const USERNAME_REGEX = /^[a-zA-Z0-9_]{5,32}$/;
 
 export default function Page() {
@@ -32,25 +27,19 @@ export default function Page() {
   const wallet = useTonWallet();
 
   const [username, setUsername] = useState('');
-  const [amountStr, setAmountStr] = useState('100'); // контролируемое поле
+  const [amountStr, setAmountStr] = useState('100');
   const amount = useMemo(() => {
-    // Разрешаем пустое поле без падений
     if (amountStr.trim() === '') return 0;
     const v = Number(amountStr);
     return Number.isFinite(v) ? Math.floor(Math.max(0, v)) : 0;
   }, [amountStr]);
 
   const amountTon = useMemo(() => amount * STAR_TON_RATE, [amount]);
+  const usernameValid = useMemo(() => USERNAME_REGEX.test(username), [username]);
 
-  const usernameValid = useMemo(
-    () => USERNAME_REGEX.test(username),
-    [username]
-  );
-
-  // ---------- баланс ----------
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const [balLoading, setBalLoading] = useState(false);
-  const address = wallet?.account?.address; // UI React v2 отдаёт дружественный EQ...
+  const address = wallet?.account?.address;
 
   useEffect(() => {
     let cancelled = false;
@@ -75,25 +64,18 @@ export default function Page() {
     };
   }, [address]);
 
-  // Кнопка отключения кошелька
   async function disconnect() {
     try {
       await tonConnectUI.disconnect();
-    } catch {
-      /* игнор */
-    }
+    } catch {}
   }
 
-  // Подключение кошелька
   async function connect() {
     try {
       await tonConnectUI.openModal();
-    } catch {
-      /* игнор */
-    }
+    } catch {}
   }
 
-  // «Купить» (пока просто подтверждение — тут будет логика платежа)
   function onBuy() {
     if (!wallet) return;
     alert(
@@ -103,13 +85,11 @@ export default function Page() {
     );
   }
 
-  // Блокируем покупку если: нет кошелька, некорректный ник, сумма <1, не хватает TON и т.д.
   const notEnough =
     balanceTon !== null && amountTon > 0 && amountTon > balanceTon;
   const canBuy =
     !!wallet && usernameValid && amount >= 1 && amountTon > 0 && !notEnough;
 
-  // UI-тексты (RU/EN примитивно; возьми из своего i18n при желании)
   const t = {
     title: 'Покупай Telegram Stars за TON',
     fast: 'Быстро. Без KYC. Прозрачно.',
@@ -127,7 +107,7 @@ export default function Page() {
 
   return (
     <div style={{ maxWidth: 820, margin: '0 auto', padding: 16 }}>
-      {/* хедер */}
+      {/* header */}
       <div
         style={{
           display: 'flex',
@@ -200,15 +180,13 @@ export default function Page() {
         </div>
       </div>
 
-      {/* заголовки */}
-      <h1 style={{ margin: 0, fontSize: 42, lineHeight: 1.1 }}>
-        {t.title}
-      </h1>
+      {/* title */}
+      <h1 style={{ margin: 0, fontSize: 42, lineHeight: 1.1 }}>{t.title}</h1>
       <div style={{ opacity: 0.7, marginTop: 8, marginBottom: 22 }}>
         {t.fast}
       </div>
 
-      {/* карточка покупки */}
+      {/* card */}
       <div
         style={{
           padding: 20,
@@ -227,8 +205,11 @@ export default function Page() {
         </label>
         <input
           value={username}
-          onChange={(e) => setUsername(e.target.value.trim())}
-          inputMode="latin"
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
+            setUsername(v);
+          }}
+          inputMode="text"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
@@ -266,7 +247,6 @@ export default function Page() {
             setAmountStr(next);
           }}
           onBlur={() => {
-            // нормализуем при уходе фокуса (минимум 1)
             const v = Math.max(1, amount || 0);
             setAmountStr(String(v));
           }}
