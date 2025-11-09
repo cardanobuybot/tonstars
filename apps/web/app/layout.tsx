@@ -6,17 +6,17 @@ export const metadata = {
 
 import './globals.css';
 import React from 'react';
-import TonConnectProvider from './providers/TonConnectProvider';
+import TonProvider from './providers/TonProvider';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        {/* Если захочешь PWA позже — здесь будет link на webmanifest. Для TonConnect не нужен. */}
+        <link rel="manifest" href="/tonconnect-manifest.json" />
       </head>
       <body>
-        <TonConnectProvider>{children}</TonConnectProvider>
+        <TonProvider>{children}</TonProvider>
       </body>
     </html>
   );
