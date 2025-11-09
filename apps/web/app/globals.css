@@ -1,77 +1,192 @@
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+}
 
 html, body {
-  margin: 0; padding: 0;
+  margin: 0;
+  padding: 0;
   height: 100%;
   background: #0a0f1a;
   color: #e5edf5;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji","Segoe UI Emoji";
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
 }
 
-* { box-sizing: border-box; }
-a { color: #9fb4cc; text-decoration: none; }
-button { cursor: pointer; font-family: inherit; }
-
-/* контейнер ширины */
-.container { max-width: 980px; margin: 0 auto; padding: 0 16px; }
-
-/* ── header layout ── */
-[data-hdr]{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-[data-hdr-left]{ display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
-[data-hdr-right]{ flex-shrink:0; }
-
-/* безопасные отступы сверху/снизу */
-@supports (padding: max(0px)) {
-  .safe-bottom { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+form {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 }
 
-/* TonConnect button лёгкое уменьшение на очень узких */
-[data-tc-button]{ white-space:nowrap; }
-@media (max-width: 560px){ [data-tc-button]{ transform:scale(.92); transform-origin:right center; } }
-@media (max-width: 440px){ [data-tc-button]{ transform:scale(.86); } }
-@media (max-width: 380px){ [data-tc-button]{ transform:scale(.82); } }
+* {
+  box-sizing: border-box;
+}
 
-/* инпуты ок/ошибка */
-.input-ok { border-color: rgba(0, 220, 130, 0.45) !important; box-shadow: 0 0 0 2px rgba(0, 220, 130, 0.15); }
-.input-err { border-color: rgba(255, 90, 90, 0.55) !important; box-shadow: 0 0 0 2px rgba(255, 90, 90, 0.12); }
-.ok { color: rgba(0, 220, 130, 0.9) !important; }
-.err { color: rgba(255, 120, 120, 0.95) !important; }
+a {
+  color: #9fb4cc;
+  text-decoration: none;
+}
 
-/* ── нижняя планка: язык + ссылки ── */
-.bottom-bar{
-  max-width: 840px;
-  margin: 24px auto 0;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255,255,255,0.06);
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Контейнер страницы */
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ——— header layout ——— */
+[data-hdr] {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+}
+
+[data-hdr-left] {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+[data-hdr-right] {
+  flex-shrink: 0;
+}
+
+/* Пилюля языка слегка ужимается на узких */
+@media (max-width: 480px) {
+  [data-langpill] {
+    transform: scale(.92);
+    transform-origin: left center;
+  }
+}
+
+/* Разрешаем перенос шапки на 2 строки на очень узких */
+@media (max-width: 400px) {
+  [data-hdr] {
+    flex-wrap: wrap;
+  }
+  [data-hdr-right] {
+    margin-left: auto;
+  }
+}
+
+/* ——— TonConnect button: аккуратно уменьшаем ——— */
+[data-tc-button] {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  [data-tc-button] {
+    transform: scale(.92);
+    transform-origin: right center;
+  }
+}
+
+@media (max-width: 440px) {
+  [data-tc-button] {
+    transform: scale(.86);
+  }
+}
+
+@media (max-width: 380px) {
+  [data-tc-button] {
+    transform: scale(.82);
+  }
+}
+
+/* Лёгкое уменьшение TonConnect-кнопки на узких экранах */
+@media (max-width: 420px) {
+  [data-tc-button] {
+    transform: scale(0.92);
+    transform-origin: right center;
+  }
+}
+
+/* ——— форма покупки ——— */
+.card input.input-ok {
+  border-color: #00c56e !important;
+  box-shadow: 0 0 4px #00c56e40;
+}
+
+.card input.input-err {
+  border-color: #c73333 !important;
+  box-shadow: 0 0 4px #c7333340;
+}
+
+.ok {
+  color: #00c56e;
+}
+
+.err {
+  color: #ff5555;
+}
+
+/* ——— общий футер (старый вариант, можно удалить если не используется) ——— */
+.footer {
+  border-top: 1px solid rgba(255, 255, 255, .06);
+  margin-top: 40px;
+  padding: 20px 0;
+}
+
+.footer__inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 16px;
   flex-wrap: wrap;
 }
 
-/* Language pill */
-[data-langpill]{
-  display:inline-flex; align-items:center; gap:8px;
-  background:#10131a; padding:4px; border-radius:16px;
-  border:1px solid rgba(255,255,255,0.06);
-}
-[data-langpill] button{
-  padding:6px 12px; border-radius:14px; border:1px solid rgba(255,255,255,0.08);
-  background:transparent; color:#cdd6f4; font-weight:700;
-}
-[data-langpill] .lang-active{
-  background:#0098ea; color:#fff; border-color:transparent;
+.footer a {
+  opacity: .85;
 }
 
-/* Footer inline */
-.footer-inline{
-  display:flex; align-items:center; gap:12px; opacity:.9; font-size:15px;
+.footer a:hover {
+  opacity: 1;
 }
-.footer-inline a { opacity:.85; }
-.footer-inline a:hover{ opacity:1; }
 
-/* маленькие экраны — перенос по строкам и центрирование */
-@media (max-width: 480px){
-  .bottom-bar{ justify-content:center; text-align:center; gap:12px; }
+.footer__inner + div {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Безопасный отступ снизу для вырезов / жестовой панели */
+@supports (padding: max(0px)) {
+  .safe-bottom {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+/* ——— нижняя панель: язык + ссылки в одну линию ——— */
+.bottom-bar .foot-link {
+  color: #9fb4ff;
+  text-decoration: none;
+}
+
+.bottom-bar .foot-link:hover {
+  opacity: 1;
+}
+
+.bottom-bar .foot-sep {
+  opacity: .7;
+}
+
+.bottom-bar .foot-mute {
+  opacity: .85;
+}
+
+@media (max-width: 420px) {
+  .bottom-bar {
+    gap: 14px;
+  }
+
+  .lang-pill {
+    transform: translateX(-8px);
+  }
 }
