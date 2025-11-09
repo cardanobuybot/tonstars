@@ -258,8 +258,9 @@ export default function Page() {
         </button>
       </div>
 
-      {/* ── FOOTER + LANG: по центру, но язык чуть левее ───────────── */}
+      {/* ── BOTTOM BAR: язык + ссылки в одну линию по центру ───────── */}
 <div
+  className="bottom-bar"
   style={{
     maxWidth: 840,
     margin: '28px auto 0',
@@ -268,14 +269,15 @@ export default function Page() {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 28,
-    flexWrap: 'wrap',
+    gap: 20,
+    flexWrap: 'wrap',          // если совсем узко — аккуратно перенесёт
     opacity: 0.9,
-    fontSize: 15,
+    fontSize: 15
   }}
 >
-  {/* язык — немного левее общего центра */}
+  {/* переключатель языка – чутка левее визуального центра */}
   <div
+    className="lang-pill"
     style={{
       display: 'inline-flex',
       alignItems: 'center',
@@ -284,7 +286,7 @@ export default function Page() {
       padding: '2px 6px',
       borderRadius: 16,
       border: '1px solid rgba(255,255,255,0.06)',
-      transform: 'translateX(-20px)', // ← лёгкий сдвиг влево
+      transform: 'translateX(-16px)'
     }}
   >
     <button
@@ -296,7 +298,7 @@ export default function Page() {
         border: '1px solid rgba(255,255,255,0.08)',
         background: lang === 'ru' ? '#0098ea' : 'transparent',
         color: lang === 'ru' ? '#fff' : '#cdd6f4',
-        fontWeight: 700,
+        fontWeight: 700
       }}
     >
       RU
@@ -310,33 +312,19 @@ export default function Page() {
         border: '1px solid rgba(255,255,255,0.08)',
         background: lang === 'en' ? '#0098ea' : 'transparent',
         color: lang === 'en' ? '#fff' : '#cdd6f4',
-        fontWeight: 700,
+        fontWeight: 700
       }}
     >
       EN
     </button>
   </div>
 
-  {/* ссылки справа от переключателя */}
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      flexWrap: 'wrap',
-      justifyContent: 'center',
-    }}
-  >
-    <a href="/privacy" style={{ color: '#9fb4ff', textDecoration: 'none' }}>
-      {t.policy}
-    </a>
-    <span aria-hidden="true">|</span>
-    <a href="/terms" style={{ color: '#9fb4ff', textDecoration: 'none' }}>
-      {t.terms}
-    </a>
-    <span aria-hidden="true">|</span>
-    <span>{t.yearLine}</span>
-  </div>
+  {/* разделители и ссылки */}
+  <a href="/privacy" className="foot-link">{t.policy}</a>
+  <span className="foot-sep">|</span>
+  <a href="/terms" className="foot-link">{t.terms}</a>
+  <span className="foot-sep">|</span>
+  <span className="foot-mute">{t.yearLine}</span>
 </div>
     </div>
   );
