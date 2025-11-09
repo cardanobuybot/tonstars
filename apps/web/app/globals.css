@@ -12,7 +12,7 @@ html, body {
 a { color: #9fb4cc; text-decoration: none; }
 button { cursor: pointer; font-family: inherit; }
 
-/* Карточки/формы по-умолчанию */
+/* Карточки */
 form,
 .card {
   background: rgba(255, 255, 255, 0.03);
@@ -21,14 +21,14 @@ form,
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 }
 
-/* Контейнер страницы */
+/* Контейнер */
 .container {
   max-width: 980px;
   margin: 0 auto;
   padding: 0 16px;
 }
 
-/* ───── HEADER ───── */
+/* HEADER */
 [data-hdr]{
   display:flex;
   align-items:center;
@@ -46,18 +46,7 @@ form,
 
 [data-hdr-right]{ flex-shrink:0; }
 
-/* Пилюля языка */
-[data-langpill]{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  background:#10131a;
-  padding:2px 6px;
-  border-radius:16px;
-  border:1px solid rgba(255,255,255,0.06);
-}
-
-/* Не даём TonConnect кнопке ломать строку, мягко уменьшаем на узких */
+/* Кнопка TonConnect */
 [data-tc-button]{ white-space:nowrap; }
 @media (max-width: 560px){
   [data-tc-button]{ transform:scale(.92); transform-origin:right center; }
@@ -69,30 +58,23 @@ form,
   [data-tc-button]{ transform:scale(.82); }
 }
 
-/* Разрешаем перенос шапки на 2 строки на очень узких */
-@media (max-width: 400px){
-  [data-hdr]{ flex-wrap:wrap; row-gap:10px; }
-  [data-hdr-right]{ margin-left:auto; }
-  [data-langpill]{ transform:scale(.92); transform-origin:left center; }
-}
-
 /* ───── ВАЛИДАЦИЯ ───── */
-.ok  { color: #6ee7a8; }      /* зелёный текст OK */
-.err { color: #f87171; }      /* красный текст ошибки */
+.ok  { color: #6ee7a8; }      /* зелёный текст */
+.err { color: #f87171; }      /* красный текст */
 
 .input-ok {
-  border-color: rgba(16,185,129,.65) !important;   /* emerald-500 */
+  border-color: rgba(16,185,129,.65) !important;
   box-shadow: 0 0 0 3px rgba(16,185,129,.15);
 }
 .input-err {
-  border-color: rgba(239,68,68,.65) !important;    /* red-500 */
+  border-color: rgba(239,68,68,.65) !important;
   box-shadow: 0 0 0 3px rgba(239,68,68,.12);
 }
 
 /* ───── FOOTER ───── */
 .footer {
   border-top: 1px solid rgba(255,255,255,.06);
-  margin-top: 40px;
+  margin-top: 32px;
   padding: 20px 0;
 }
 .footer__inner {
@@ -109,7 +91,20 @@ form,
 .footer a { opacity:.9; }
 .footer a:hover { opacity:1; }
 
-/* безопасный отступ снизу под жестовую панель */
+/* Языковой переключатель внизу */
+[data-langpill] {
+  margin: 36px auto 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #10131a;
+  padding: 2px 6px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* безопасный отступ под жестовую панель */
 @supports (padding: max(0px)) {
   .safe-bottom { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }
