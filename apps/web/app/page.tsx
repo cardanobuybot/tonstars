@@ -232,13 +232,12 @@ export default function Page() {
         </button>
       </div>
 
-      <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
-        marginTop: 28, fontSize: 16
-      }}>
-        <a href="/privacy">{t.policy}</a>
-        <a href="/terms">{t.terms}</a>
-      </div>
+      <footer className="footer safe-bottom">
+  <div className="container footer__inner">
+    <a href="/privacy" aria-label="Политика конфиденциальности">Политика</a>
+    <a href="/terms" aria-label="Условия использования">Условия</a>
+  </div>
+</footer>
     </div>
   );
 }
