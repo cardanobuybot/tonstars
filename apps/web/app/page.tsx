@@ -47,7 +47,7 @@ export default function Page() {
 
   useEffect(() => {
     if (wallet) {
-      // эмуляция получения баланса — позже можно подцепить API
+      // имитация получения баланса
       setBalance(5.8294);
     } else {
       setBalance(null);
@@ -95,15 +95,44 @@ export default function Page() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
           <div style={{ fontWeight: 700, fontSize: 22 }}>TonStars</div>
-          <div style={{ display: 'flex', gap: 8, marginLeft: 12 }}>
+
+          {/* языковой слайдер */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(255,255,255,0.1)',
+              borderRadius: 20,
+              padding: 4,
+              width: 90,
+              marginLeft: 10,
+              position: 'relative',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: 4,
+                left: lang === 'ru' ? 4 : 46,
+                width: 40,
+                height: 24,
+                background: '#fff',
+                borderRadius: 16,
+                transition: 'left 0.25s ease',
+              }}
+            />
             <button
               onClick={() => setLang('ru')}
               style={{
-                background: lang === 'ru' ? '#fff' : 'transparent',
+                width: 40,
+                height: 24,
+                border: 'none',
+                background: 'transparent',
                 color: lang === 'ru' ? '#000' : '#fff',
-                borderRadius: 8,
-                padding: '4px 8px',
-                border: '1px solid rgba(255,255,255,0.2)',
+                fontSize: 13,
+                fontWeight: 600,
+                position: 'relative',
+                zIndex: 2,
               }}
             >
               RU
@@ -111,17 +140,22 @@ export default function Page() {
             <button
               onClick={() => setLang('en')}
               style={{
-                background: lang === 'en' ? '#fff' : 'transparent',
+                width: 40,
+                height: 24,
+                border: 'none',
+                background: 'transparent',
                 color: lang === 'en' ? '#000' : '#fff',
-                borderRadius: 8,
-                padding: '4px 8px',
-                border: '1px solid rgba(255,255,255,0.2)',
+                fontSize: 13,
+                fontWeight: 600,
+                position: 'relative',
+                zIndex: 2,
               }}
             >
               EN
             </button>
           </div>
         </div>
+
         <TonConnectButton />
       </div>
 
