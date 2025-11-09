@@ -258,7 +258,7 @@ export default function Page() {
         </button>
       </div>
 
-      {/* ── FOOTER + LANG: одна горизонтальная линия по центру ───────────── */}
+      {/* ── FOOTER + LANG: по центру, но язык чуть левее ───────────── */}
 <div
   style={{
     maxWidth: 840,
@@ -268,14 +268,13 @@ export default function Page() {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 20,
+    gap: 28,
     flexWrap: 'wrap',
     opacity: 0.9,
     fontSize: 15,
-    textAlign: 'center',
   }}
 >
-  {/* язык */}
+  {/* язык — немного левее общего центра */}
   <div
     style={{
       display: 'inline-flex',
@@ -285,6 +284,7 @@ export default function Page() {
       padding: '2px 6px',
       borderRadius: 16,
       border: '1px solid rgba(255,255,255,0.06)',
+      transform: 'translateX(-20px)', // ← лёгкий сдвиг влево
     }}
   >
     <button
@@ -317,10 +317,7 @@ export default function Page() {
     </button>
   </div>
 
-  {/* вертикальный разделитель */}
-  <span style={{ opacity: 0.5 }}>|</span>
-
-  {/* ссылки */}
+  {/* ссылки справа от переключателя */}
   <div
     style={{
       display: 'flex',
