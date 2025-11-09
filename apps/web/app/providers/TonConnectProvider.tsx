@@ -1,12 +1,13 @@
 'use client';
 
+import React from 'react';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
-import { PropsWithChildren } from 'react';
 
-const MANIFEST =
-  process.env.NEXT_PUBLIC_TONCONNECT_MANIFEST_URL
-  ?? 'https://tonstars.io/.well-known/tonconnect-manifest.json';
+export default function TonProvider({ children }: { children: React.ReactNode }) {
+  const manifestUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/.well-known/tonconnect-manifest.json`
+      : '/.well-known/tonconnect-manifest.json';
 
-export default function TonConnectProvider({ children }: PropsWithChildren) {
-  return <TonConnectUIProvider manifestUrl={MANIFEST}>{children}</TonConnectUIProvider>;
+  return <TonConnectUIProvider manifestUrl={manifestUrl}>{children}</TonConnectUIProvider>;
 }
