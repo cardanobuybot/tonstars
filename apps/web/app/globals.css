@@ -3,3 +3,10 @@ html, body { margin: 0; padding: 0; background: #0a0f1a; color: #e5edf5; font-fa
 * { box-sizing: border-box; }
 a { color: #9fb4cc; text-decoration: none; }
 button { font-family: inherit; }
+/* Чуть уменьшаем TonConnect кнопку только на узких экранах */
+@media (max-width: 420px) {
+  [data-tc-button] {
+    transform: scale(0.92);
+    transform-origin: right center;
+  }
+}
