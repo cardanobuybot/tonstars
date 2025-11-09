@@ -333,23 +333,25 @@ export default function Page() {
       </div>
 
       {/* footer */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: 15,
-          marginTop: 40,
-          opacity: 0.8,
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          paddingTop: 16,
-        }}
-      >
-        <div style={{ display: 'flex', gap: 24 }}>
-          <a href="/privacy">{t.policy}</a>
-          <a href="/terms">{t.terms}</a>
-        </div>
-        <div>© 2025 TonStars. All rights reserved.</div>
-      </div>
-    </div>
+<div
+  style={{
+    marginTop: 32,
+    padding: '16px 0',
+    borderTop: '1px solid rgba(255,255,255,0.1)',
+    textAlign: 'center',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+  }}
+>
+  <a href="/privacy" style={{ color: 'inherit', textDecoration: 'none', marginRight: 12 }}>
+    Политика
+  </a>
+  |
+  <a href="/terms" style={{ color: 'inherit', textDecoration: 'none', marginLeft: 12, marginRight: 12 }}>
+    Условия
+  </a>
+  |
+  <span style={{ marginLeft: 12 }}>© 2025 TonStars</span>
+</div>
   );
 }
