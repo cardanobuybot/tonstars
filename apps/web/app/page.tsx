@@ -1,251 +1,340 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
-import { Address } from '@ton/core';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 
+// 1 STAR = 0.0002 TON (пример: 1000 → 0.2 TON)
 const STAR_TON_RATE = 0.0002;
 
-const usernameHint = {
-  ru: 'Введите ник без @. Допустимы латинские буквы, цифры и _ (5–32).',
-  en: 'Enter username without @. Latin letters, digits and _ (5–32).'
-};
+// ---------- helpers ----------
+function formatTon(v: number) {
+  if (!isFinite(v)) return '0.0000';
+  return v.toFixed(4);
+}
 
-const tgRegex = /^[a-z0-9_]{5,32}$/i;
+async function fetchTonBalance(address: string): Promise<number> {
+  // TonAPI принимает «дружественный» адрес вида EQ...
+  const r = await fetch(`https://tonapi.io/v2/accounts/${address}`, {
+    cache: 'no-store',
+  });
+  if (!r.ok) throw new Error('Balance request failed');
+  const data = await r.json();
+  // balance возвращается в nanotons (1e9 = 1 TON)
+  const nano: number = Number(data.balance ?? 0);
+  return nano / 1e9;
+}
+
+// Разрешённые символы для Telegram username (без @)
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{5,32}$/;
 
 export default function Page() {
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
 
-  const [username, setUsername] = useState<string>('');
-  const [starsInput, setStarsInput] = useState<string>(''); // строка — чтобы можно было очистить
-  const [lang, setLang] = useState<'ru' | 'en'>('ru');
+  const [username, setUsername] = useState('');
+  const [amountStr, setAmountStr] = useState('100'); // контролируемое поле
+  const amount = useMemo(() => {
+    // Разрешаем пустое поле без падений
+    if (amountStr.trim() === '') return 0;
+    const v = Number(amountStr);
+    return Number.isFinite(v) ? Math.floor(Math.max(0, v)) : 0;
+  }, [amountStr]);
 
-  const starsNum = useMemo(() => {
-    const n = Number(starsInput || 0);
-    if (!Number.isFinite(n)) return 0;
-    return Math.floor(Math.max(0, n));
-  }, [starsInput]);
+  const amountTon = useMemo(() => amount * STAR_TON_RATE, [amount]);
 
-  const amountTon = useMemo(() => {
-    const v = starsNum * STAR_TON_RATE;
-    return (Math.round(v * 1e4) / 1e4).toFixed(4);
-  }, [starsNum]);
+  const usernameValid = useMemo(
+    () => USERNAME_REGEX.test(username),
+    [username]
+  );
 
-  const isUserOk = tgRegex.test(username);
-  const isStarsOk = starsNum >= 1;
-  const isConnected = !!wallet?.account;
-  const canBuy = isConnected && isUserOk && isStarsOk;
+  // ---------- баланс ----------
+  const [balanceTon, setBalanceTon] = useState<number | null>(null);
+  const [balLoading, setBalLoading] = useState(false);
+  const address = wallet?.account?.address; // UI React v2 отдаёт дружественный EQ...
 
-  const onUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.trim();
-    const cleaned = val.replace(/[^a-z0-9_]/gi, '');
-    setUsername(cleaned);
-  };
-
-  const onStarsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '');
-    setStarsInput(digits);
-  };
-
-  const onBuy = async () => {
-    if (!isUserOk) {
-      alert(lang === 'ru'
-        ? 'Неверный ник. Разрешены латиница, цифры и _. Длина 5–32.'
-        : 'Invalid username. Use Latin letters, digits or _. Length 5–32.');
-      return;
-    }
-    if (!isStarsOk) {
-      alert(lang === 'ru' ? 'Минимум 1 звезда.' : 'Minimum is 1 star.');
-      return;
-    }
-    if (!isConnected) {
-      await tonConnectUI.openModal();
-      return;
-    }
-
-    const short = (() => {
-      try {
-        const testOnly = wallet?.account?.chain === '-239';
-        const friendly = Address.parseRaw(wallet!.account!.address)
-          .toString({ bounceable: false, urlSafe: true, testOnly });
-        return friendly.length > 14 ? `${friendly.slice(0, 6)}…${friendly.slice(-4)}` : friendly;
-      } catch {
-        const raw = wallet?.account?.address || '';
-        return raw.length > 14 ? `${raw.slice(0, 6)}…${raw.slice(-4)}` : raw;
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!address) {
+        setBalanceTon(null);
+        return;
       }
-    })();
+      try {
+        setBalLoading(true);
+        const b = await fetchTonBalance(address);
+        if (!cancelled) setBalanceTon(b);
+      } catch {
+        if (!cancelled) setBalanceTon(null);
+      } finally {
+        if (!cancelled) setBalLoading(false);
+      }
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
 
-    const msg =
-      lang === 'ru'
-        ? `Отправим ${starsNum} Stars пользователю @${username} за ≈ ${amountTon} TON\nКошелёк: ${short}`
-        : `We will send ${starsNum} Stars to @${username} for ≈ ${amountTon} TON\nWallet: ${short}`;
-    alert(msg);
-  };
+  // Кнопка отключения кошелька
+  async function disconnect() {
+    try {
+      await tonConnectUI.disconnect();
+    } catch {
+      /* игнор */
+    }
+  }
 
+  // Подключение кошелька
+  async function connect() {
+    try {
+      await tonConnectUI.openModal();
+    } catch {
+      /* игнор */
+    }
+  }
+
+  // «Купить» (пока просто подтверждение — тут будет логика платежа)
+  function onBuy() {
+    if (!wallet) return;
+    alert(
+      `Отправим ${amount} Stars пользователю @${username} за ~ ${formatTon(
+        amountTon
+      )} TON`
+    );
+  }
+
+  // Блокируем покупку если: нет кошелька, некорректный ник, сумма <1, не хватает TON и т.д.
+  const notEnough =
+    balanceTon !== null && amountTon > 0 && amountTon > balanceTon;
+  const canBuy =
+    !!wallet && usernameValid && amount >= 1 && amountTon > 0 && !notEnough;
+
+  // UI-тексты (RU/EN примитивно; возьми из своего i18n при желании)
   const t = {
-    title: lang === 'ru' ? 'Покупай Telegram Stars за TON' : 'Buy Telegram Stars with TON',
-    subtitle: lang === 'ru' ? 'Быстро. Без KYC. Прозрачно.' : 'Fast. No KYC. Transparent.',
-    formTitle: lang === 'ru' ? 'Купить Stars' : 'Buy Stars',
-    usernameLabel: lang === 'ru' ? '@Telegram username' : '@Telegram username',
-    usernameWillSend:
-      lang === 'ru'
-        ? (u: string) => (u ? `Будет отправлено @${u}` : '')
-        : (u: string) => (u ? `Will be sent to @${u}` : ''),
-    amountLabel: lang === 'ru' ? 'Сумма Stars' : 'Stars amount',
-    toPay: lang === 'ru' ? 'К оплате (TON)' : 'To pay (TON)',
-    buy: lang === 'ru' ? 'Купить Stars' : 'Buy Stars',
-    policy: lang === 'ru' ? 'Политика' : 'Privacy',
-    terms: lang === 'ru' ? 'Условия' : 'Terms'
+    title: 'Покупай Telegram Stars за TON',
+    fast: 'Быстро. Без KYC. Прозрачно.',
+    buyBox: 'Купить Stars',
+    userLabel: '@Telegram username',
+    userHint: 'Введите ник без @. Допустимы латинские буквы, цифры и _ (5–32).',
+    amountLabel: 'Сумма Stars',
+    ok: (n: number) => `OK — ${n || 0} Stars`,
+    toPay: 'К оплате (TON)',
+    balance: 'Баланс (TON)',
+    buy: 'Купить Stars',
+    connect: 'Подключить кошелёк',
+    logout: 'Выйти',
   };
 
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px 64px' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* фикс иконки */}
-          <img src="/icon-512.png" alt="TonStars" width={36} height={36} style={{ borderRadius: 8 }} />
+    <div style={{ maxWidth: 820, margin: '0 auto', padding: 16 }}>
+      {/* хедер */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          justifyContent: 'space-between',
+          marginBottom: 18,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <img
+            src="/icon-512.png"
+            alt="TonStars"
+            width={32}
+            height={32}
+            style={{ borderRadius: 6 }}
+          />
           <div style={{ fontSize: 20, fontWeight: 700 }}>TonStars</div>
-
-          {/* RU/EN */}
-          <div
-            style={{
-              marginLeft: 8, display: 'flex', gap: 6, border: '1px solid rgba(255,255,255,.12)',
-              borderRadius: 999, padding: '2px'
-            }}
-          >
-            <button
-              onClick={() => setLang('ru')}
-              style={{
-                padding: '6px 10px', borderRadius: 999,
-                background: lang === 'ru' ? 'rgba(255,255,255,.1)' : 'transparent',
-                color: '#fff', border: 0
-              }}
-            >
-              RU
-            </button>
-            <button
-              onClick={() => setLang('en')}
-              style={{
-                padding: '6px 10px', borderRadius: 999,
-                background: lang === 'en' ? 'rgba(255,255,255,.1)' : 'transparent',
-                color: '#fff', border: 0
-              }}
-            >
-              EN
-            </button>
-          </div>
         </div>
 
-        {/* оставляем только стандартную кнопку TonConnect — без нашего дублирующего чипа */}
-        <TonConnectButton />
+        <div style={{ display: 'flex', gap: 8 }}>
+          {wallet ? (
+            <>
+              <div
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.06)',
+                  fontSize: 14,
+                }}
+              >
+                {address?.slice(0, 4)}…{address?.slice(-4)}{' '}
+                {balanceTon !== null && (
+                  <span style={{ opacity: 0.8 }}>
+                    · {formatTon(balanceTon)} TON
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={disconnect}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  cursor: 'pointer',
+                }}
+              >
+                {t.logout}
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={connect}
+              style={{
+                padding: '10px 16px',
+                borderRadius: 12,
+                background:
+                  'linear-gradient(90deg, #4da3ff 0%, #2fe3c8 100%)',
+                color: '#001014',
+                fontWeight: 700,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+              data-tc-button
+            >
+              {t.connect}
+            </button>
+          )}
+        </div>
       </div>
 
-      <h1 style={{ fontSize: 44, lineHeight: 1.12, margin: '8px 0 8px' }}>{t.title}</h1>
-      <div style={{ opacity: 0.8, marginBottom: 22 }}>{t.subtitle}</div>
+      {/* заголовки */}
+      <h1 style={{ margin: 0, fontSize: 42, lineHeight: 1.1 }}>
+        {t.title}
+      </h1>
+      <div style={{ opacity: 0.7, marginTop: 8, marginBottom: 22 }}>
+        {t.fast}
+      </div>
 
-      <div style={{
-        background: 'rgba(255,255,255,.03)',
-        border: '1px solid rgba(255,255,255,.08)',
-        borderRadius: 20,
-        padding: 20
-      }}>
-        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>{t.formTitle}</div>
+      {/* карточка покупки */}
+      <div
+        style={{
+          padding: 20,
+          borderRadius: 16,
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+        }}
+      >
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
+          {t.buyBox}
+        </div>
 
-        {/* username */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.usernameLabel}</label>
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
+          {t.userLabel}
+        </label>
         <input
-          type="text"
-          inputMode="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value.trim())}
+          inputMode="latin"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
           placeholder="username"
-          value={username}
-          onChange={onUsernameChange}
           style={{
-            width: '100%', height: 48, padding: '0 14px',
-            background: 'rgba(255,255,255,.04)',
-            border: `1px solid ${
-              username === '' ? 'rgba(255,255,255,.1)' : isUserOk ? 'rgba(59,180,74,.7)' : 'rgba(255,92,92,.7)'
-            }`,
-            borderRadius: 12, color: '#e8f0ff', outline: 'none'
+            width: '100%',
+            height: 52,
+            padding: '0 14px',
+            borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.14)',
+            background: 'rgba(255,255,255,0.02)',
+            color: '#e5edf5',
+            outline: 'none',
           }}
         />
-        <div style={{
-          minHeight: 20, marginTop: 6,
-          color: username && !isUserOk ? '#ff6b6b' : 'rgba(255,255,255,.55)', fontSize: 13
-        }}>
-          {username && !isUserOk ? (lang === 'ru'
-            ? 'Неверный формат. 5–32, латиница/цифры/_'
-            : 'Invalid format. 5–32, latin/digits/_')
-            : usernameHint[lang]}
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 14,
+            fontSize: 13,
+            opacity: 0.7,
+            color: username.length > 0 && !usernameValid ? '#ff6868' : 'inherit',
+          }}
+        >
+          {t.userHint}
         </div>
 
-        {/* stars */}
-        <label style={{ display: 'block', marginTop: 14, marginBottom: 8, opacity: 0.9 }}>
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
           {t.amountLabel}
         </label>
         <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
+          value={amountStr}
+          onChange={(e) => {
+            const next = e.target.value.replace(/[^\d]/g, '');
+            setAmountStr(next);
+          }}
+          onBlur={() => {
+            // нормализуем при уходе фокуса (минимум 1)
+            const v = Math.max(1, amount || 0);
+            setAmountStr(String(v));
+          }}
           placeholder="100"
-          value={starsInput}
-          onChange={onStarsChange}
+          inputMode="numeric"
           style={{
-            width: '100%', height: 48, padding: '0 14px',
-            background: 'rgba(255,255,255,.04)',
-            border: `1px solid ${
-              starsInput === '' ? 'rgba(255,255,255,.1)' : isStarsOk ? 'rgba(59,180,74,.7)' : 'rgba(255,92,92,.7)'
-            }`,
-            borderRadius: 12, color: '#e8f0ff', outline: 'none'
+            width: '100%',
+            height: 52,
+            padding: '0 14px',
+            borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.14)',
+            background: 'rgba(255,255,255,0.02)',
+            color: '#e5edf5',
+            outline: 'none',
           }}
         />
-        <div style={{ minHeight: 20, marginTop: 6, opacity: .6, fontSize: 13 }}>
-          OK — {starsNum} Stars
+        <div style={{ marginTop: 8, marginBottom: 16, opacity: 0.7 }}>
+          {t.ok(amount)}
         </div>
 
-        {/* итог */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginTop: 8, marginBottom: 12, fontSize: 18
-        }}>
+        {/* итог + баланс */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: 8,
+            alignItems: 'center',
+            marginTop: 8,
+            marginBottom: 12,
+            fontSize: 16,
+          }}
+        >
           <div>{t.toPay}</div>
-          <div>≈ {amountTon} TON</div>
+          <div>≈ {formatTon(amountTon)} TON</div>
+
+          <div style={{ opacity: 0.8 }}>{t.balance}</div>
+          <div
+            style={{
+              color: notEnough ? '#ff6868' : 'inherit',
+              opacity: balLoading ? 0.6 : 1,
+            }}
+          >
+            {balLoading || balanceTon === null
+              ? '—'
+              : `${formatTon(balanceTon)} TON`}
+          </div>
         </div>
 
         <button
           onClick={onBuy}
           disabled={!canBuy}
           style={{
-            width: '100%', height: 54, border: 0, borderRadius: 12,
-            background: canBuy ? 'linear-gradient(90deg,#4dabff,#39e6c2)' : 'rgba(255,255,255,.08)',
-            color: canBuy ? '#001014' : 'rgba(255,255,255,.45)',
-            fontSize: 18, fontWeight: 700, cursor: canBuy ? 'pointer' : 'not-allowed'
+            width: '100%',
+            height: 54,
+            borderRadius: 12,
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: canBuy
+              ? 'linear-gradient(90deg, #4da3ff 0%, #2fe3c8 100%)'
+              : 'rgba(255,255,255,0.06)',
+            color: canBuy ? '#001014' : 'rgba(255,255,255,0.5)',
+            fontSize: 18,
+            fontWeight: 700,
+            cursor: canBuy ? 'pointer' : 'not-allowed',
           }}
         >
           {t.buy}
         </button>
       </div>
-
-      <footer className="footer safe-bottom">
-  <div className="container footer__inner">
-    <a href="/privacy" aria-label="Политика конфиденциальности">Политика</a>
-    <a href="/terms" aria-label="Условия использования">Условия</a>
-  </div>
-        <div style={{ 
-    textAlign: 'center',
-    marginTop: 8,
-    opacity: 0.6,
-    fontSize: 14 
-  }}>
-    © 2025 TonStars. All rights reserved.
-  </div>
-</footer>
     </div>
   );
 }
