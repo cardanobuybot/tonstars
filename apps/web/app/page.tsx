@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
+import { Address } from '@ton/core';
 import { useTonConnectUI, useTonWallet } from './providers/TonConnectProvider';
 
 const STAR_TON_RATE = 0.0002;
@@ -27,6 +28,7 @@ const t = (lang: 'ru' | 'en') =>
         confirmTitle: 'Подтвердите действие на www.tonstars.io',
         confirmText: (u: string, n: number, ton: string) =>
           `Отправим ${n} Stars пользователю @${u} за ≈ ${ton} TON`,
+        balance: (x: string) => `· ${x} TON`,
       }
     : {
         title1: 'Buy Telegram',
@@ -47,6 +49,7 @@ const t = (lang: 'ru' | 'en') =>
         confirmTitle: 'Confirm action on www.tonstars.io',
         confirmText: (u: string, n: number, ton: string) =>
           `We will send ${n} Stars to @${u} for ≈ ${ton} TON`,
+        balance: (x: string) => `· ${x} TON`,
       };
 
 function useLang(): ['ru' | 'en', (l: 'ru' | 'en') => void] {
@@ -72,6 +75,61 @@ export default function Page() {
   const wallet = useTonWallet();
   const isConnected = !!wallet?.account?.address;
 
+  // ---- friendly адрес ----
+  const friendlyAddress = useMemo(() => {
+    try {
+      const raw = wallet?.account?.address;
+      if (!raw) return '';
+      // raw выглядит как "0:abcd…", конвертируем в friendly (EQ…)
+      return Address.parseRaw(raw).toString({ bounceable: true, urlSafe: true });
+    } catch {
+      return wallet?.account?.address || '';
+    }
+  }, [wallet]);
+
+  const shortFriendly = useMemo(() => {
+    if (!friendlyAddress) return '';
+    return `${friendlyAddress.slice(0, 4)}…${friendlyAddress.slice(-4)}`;
+  }, [friendlyAddress]);
+
+  // ---- баланс ----
+  const [balanceTon, setBalanceTon] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      try {
+        if (!friendlyAddress) {
+          setBalanceTon(null);
+          return;
+        }
+        const key = process.env.NEXT_PUBLIC_TONCENTER_API_KEY;
+        const url =
+          `https://toncenter.com/api/v2/getAddressBalance?address=${friendlyAddress}` +
+          (key ? `&api_key=${encodeURIComponent(key)}` : '');
+
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json();
+        if (!alive) return;
+        // баланс в nanoton → в TON
+        if (data.ok && typeof data.result === 'string') {
+          setBalanceTon(Number(data.result) / 1e9);
+        } else {
+          setBalanceTon(null);
+        }
+      } catch {
+        if (alive) setBalanceTon(null);
+      }
+    }
+    load();
+    // обновлять раз в 20 секунд
+    const id = setInterval(load, 20000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [friendlyAddress]);
+
+  // ---- проверки формы ----
   const usernameValid = useMemo(() => {
     const u = username.trim();
     if (u.length < 5 || u.length > 32) return false;
@@ -110,10 +168,6 @@ export default function Page() {
     alert('Демо: покупка будет реализована после backend.');
   };
 
-  const shortAddr = wallet?.account?.address
-    ? `${wallet.account.address.slice(0, 4)}…${wallet.account.address.slice(-4)}`
-    : '';
-
   return (
     <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#e5edf5' }}>
       <header
@@ -147,7 +201,7 @@ export default function Page() {
           </select>
 
           <button
-            onClick={() => tonConnectUI.openModal()}
+            onClick={() => (isConnected ? tonConnectUI.openModal() : tonConnectUI.openModal())}
             style={{
               padding: '10px 16px',
               background: 'linear-gradient(90deg, #1ea0ff 0%, #00c2b8 100%)',
@@ -157,7 +211,9 @@ export default function Page() {
               fontWeight: 700,
             }}
           >
-            {isConnected ? shortAddr : (lang === 'ru' ? 'Подключить' : 'Connect') + ' Wallet'}
+            {isConnected
+              ? `${shortFriendly}${balanceTon != null ? ' ' + tr.balance(balanceTon.toFixed(2)) : ''}`
+              : (lang === 'ru' ? 'Подключить' : 'Connect') + ' Wallet'}
           </button>
         </div>
       </header>
@@ -185,7 +241,7 @@ export default function Page() {
 
           <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{tr.usernameLabel}</label>
           <input
-            inputMode="text"         // ← было "latin"
+            inputMode="text"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
@@ -197,7 +253,7 @@ export default function Page() {
               background: '#0a101c',
               color: '#e5edf5',
               border: `1px solid ${
-                username.length === 0 ? '#22304a' : usernameValid ? '#2bde73' : '#e86868'
+                username.length === 0 ? '#22304a' : /^[a-zA-Z0-9_]+$/.test(username) && username.length>=5 && username.length<=32 ? '#2bde73' : '#e86868'
               }`,
               borderRadius: 12,
               padding: '14px 16px',
@@ -208,10 +264,10 @@ export default function Page() {
             style={{
               fontSize: 12,
               marginTop: 6,
-              color: username.length === 0 ? '#90a0bf' : usernameValid ? '#2bde73' : '#e86868',
+              color: username.length === 0 ? '#90a0bf' : /^[a-zA-Z0-9_]+$/.test(username) && username.length>=5 && username.length<=32 ? '#2bde73' : '#e86868',
             }}
           >
-            {username.length === 0 ? ' ' : usernameValid ? tr.usernameHintOk(username.trim()) : tr.usernameHintBad}
+            {username.length === 0 ? ' ' : (/^[a-zA-Z0-9_]+$/.test(username) && username.length>=5 && username.length<=32 ? tr.usernameHintOk(username.trim()) : tr.usernameHintBad)}
           </div>
 
           <div style={{ height: 12 }} />
@@ -231,7 +287,7 @@ export default function Page() {
               width: '100%',
               background: '#0a101c',
               color: '#e5edf5',
-              border: `1px solid ${rawAmount.length === 0 ? '#22304a' : Number.isFinite(amount) ? '#2bde73' : '#e86868'}`,
+              border: `1px solid ${rawAmount.length === 0 ? '#22304a' : Number.isFinite(Number(rawAmount)) ? '#2bde73' : '#22304a'}`,
               borderRadius: 12,
               padding: '14px 16px',
               outline: 'none',
@@ -241,10 +297,10 @@ export default function Page() {
             style={{
               fontSize: 12,
               marginTop: 6,
-              color: rawAmount.length === 0 ? '#90a0bf' : Number.isFinite(amount) ? '#2bde73' : '#e86868',
+              color: rawAmount.length === 0 ? '#90a0bf' : Number.isFinite(Number(rawAmount)) ? '#2bde73' : '#e86868',
             }}
           >
-            {rawAmount.length === 0 ? ' ' : Number.isFinite(amount) ? tr.amountHintOk(Number(amount)) : tr.amountHintBad}
+            {rawAmount.length === 0 ? ' ' : Number.isFinite(Number(rawAmount)) ? tr.amountHintOk(Number(rawAmount)) : tr.amountHintBad}
           </div>
 
           <div style={{ height: 16 }} />
