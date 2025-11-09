@@ -12,7 +12,7 @@ const texts = {
     buyCardTitle: 'Купить Stars',
     usernameLabel: '@Telegram username',
     usernamePh: 'username',
-    usernameHint: 'Введите ник без @. Допустимы латинские буквы, цифры и _ (5–32).',
+    usernameHint: 'Введите ник без @.',
     amountLabel: 'Сумма Stars',
     ok: (n: number) => `OK — ${n} Stars`,
     usernameErr: 'Ник: латиница/цифры/_ (5–32)',
@@ -30,7 +30,7 @@ const texts = {
     buyCardTitle: 'Buy Stars',
     usernameLabel: '@Telegram username',
     usernamePh: 'username',
-    usernameHint: 'Enter username without @. Latin letters, digits and _ (5–32).',
+    usernameHint: 'Enter username without @.',
     amountLabel: 'Stars amount',
     ok: (n: number) => `OK — ${n} Stars`,
     usernameErr: 'Username: latin/digits/_ (5–32)',
@@ -95,7 +95,7 @@ export default function Page() {
   };
 
   return (
-    <div className="container safe-bottom" style={{ padding: '20px 0 28px' }}>
+    <div className="container safe-bottom" style={{ padding: '36px 0 28px' }}>
       {/* HEADER */}
       <div data-hdr>
         <div data-hdr-left>
