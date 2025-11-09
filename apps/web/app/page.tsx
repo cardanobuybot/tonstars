@@ -1,289 +1,279 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { useTonConnectUI, useTonWallet } from './providers/TonConnectProvider';
+import React, { useMemo, useState } from 'react';
+import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { Address } from '@ton/core';
 
-// 1 STAR = 0.0002 TON  (1000 → 0.2 TON)
+// 1 STAR = 0.0002 TON (1000 → 0.2 TON)
 const STAR_TON_RATE = 0.0002;
 
-// Утилиты
-const fmtTon = (t: number) => (Math.round(t * 10000) / 10000).toFixed(4);
-const shortAddr = (addr: string) => (addr.length > 10 ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : addr);
-const tgRegex = /^[a-z0-9_]{5,32}$/i;
-
-const clampStars = (v: string, min = 1, max = 1_000_000) => {
-  const n = Math.floor(Number(v.replace(/[^\d]/g, '')));
-  if (!Number.isFinite(n)) return min;
-  return Math.min(Math.max(n, min), max);
+// краткая подсказка по нику
+const usernameHint = {
+  ru: 'Введите ник без @. Допустимы латинские буквы, цифры и _ (5–32).',
+  en: 'Enter username without @. Latin letters, digits and _ (5–32).'
 };
 
-// Баланс TON (через toncenter, без ключа — ок для теста)
-async function fetchBalanceTON(address: string): Promise<number | null> {
-  try {
-    const res = await fetch(
-      `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(address)}`,
-      { cache: 'no-store' }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const nano = Number(data?.result ?? data?.balance ?? 0);
-    if (!Number.isFinite(nano)) return null;
-    return nano / 1e9;
-  } catch {
-    return null;
-  }
-}
+// простая проверка ника Telegram (без крайних кейсов)
+const tgRegex = /^[a-z0-9_]{5,32}$/i;
 
-// Пытаемся получить .ton имя (TonAPI). Если не выйдет — покажем короткий адрес.
-async function resolveTonName(address: string): Promise<string | null> {
+// формат кошелька в friendly (EQ…) и короткая форма
+function toFriendlyShort(raw?: string, testOnly = false) {
+  if (!raw) return '';
   try {
-    const res = await fetch(`https://tonapi.io/v2/dns/${encodeURIComponent(address)}`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const json = await res.json();
-    const name = json?.domain?.name || json?.name || json?.dns?.name || null;
-    return typeof name === 'string' && name.endsWith('.ton') ? name : null;
+    const addr = Address.parseRaw(raw);
+    const friendly = addr.toString({ bounceable: false, urlSafe: true, testOnly });
+    return friendly.length > 14 ? `${friendly.slice(0, 6)}…${friendly.slice(-4)}` : friendly;
   } catch {
-    return null;
+    // если вдруг не распарсили — отдаем как есть (коротко)
+    return raw.length > 14 ? `${raw.slice(0, 6)}…${raw.slice(-4)}` : raw;
   }
 }
 
 export default function Page() {
-  const [tonConnectUI] = useTonConnectUI() as any; // подстраховка типов пакета
+  const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
 
-  const [username, setUsername] = useState('');
-  const [stars, setStars] = useState<number>(100);
+  const [username, setUsername] = useState<string>('');
+  const [starsInput, setStarsInput] = useState<string>(''); // строка, чтобы можно было очищать поле
+  const [lang, setLang] = useState<'ru' | 'en'>('ru');
 
-  const [nameHint, setNameHint] = useState<string>('Введите ник без @');
-  const [isNameValid, setIsNameValid] = useState(true);
+  // friendly + короткий адрес для бейджа
+  const shortAddr = useMemo(
+    () => toFriendlyShort(wallet?.account?.address, wallet?.account?.chain === '-239'),
+    [wallet]
+  );
 
-  const [balance, setBalance] = useState<number | null>(null);
-  const [friendly, setFriendly] = useState<string | null>(null);
+  // число звёзд (из строки)
+  const starsNum = useMemo(() => {
+    const n = Number(starsInput || 0);
+    if (!Number.isFinite(n)) return 0;
+    return Math.floor(Math.max(0, n)); // только целые ≥ 0 (валидируем при клике)
+  }, [starsInput]);
 
-  // Валидация ника
-  useEffect(() => {
-    const clean = username.trim();
-    if (!clean) {
-      setIsNameValid(true);
-      setNameHint('Введите ник без @');
-      return;
-    }
-    if (clean.startsWith('@')) {
-      setIsNameValid(false);
-      setNameHint('Ник указывайте без @');
-      return;
-    }
-    if (!tgRegex.test(clean)) {
-      setIsNameValid(false);
-      setNameHint('Только латиница, цифры и подчёркивания (5–32)');
-      return;
-    }
-    setIsNameValid(true);
-    setNameHint(`Будет отправлено @${clean.toLowerCase()}`);
-  }, [username]);
+  const amountTon = useMemo(() => {
+    const v = starsNum * STAR_TON_RATE;
+    // показываем 4 знака после запятой, но без лишних нулей
+    return (Math.round(v * 1e4) / 1e4).toFixed(4);
+  }, [starsNum]);
 
-  // Баланс и .ton имя при подключении
-  const rawAddr = wallet?.account?.address || null;
+  // валидность
+  const isUserOk = tgRegex.test(username);
+  const isStarsOk = starsNum >= 1;
+  const isConnected = !!wallet?.account;
+  const canBuy = isConnected && isUserOk && isStarsOk;
 
-  useEffect(() => {
-    let cancel = false;
-    if (!rawAddr) {
-      setBalance(null);
-      setFriendly(null);
-      return;
-    }
-    (async () => {
-      const [b, dn] = await Promise.all([fetchBalanceTON(rawAddr), resolveTonName(rawAddr)]);
-      if (cancel) return;
-      setBalance(b);
-      setFriendly(dn);
-    })();
-    return () => {
-      cancel = true;
-    };
-  }, [rawAddr]);
-
-  const totalTon = useMemo(() => stars * STAR_TON_RATE, [stars]);
-  const connected = !!wallet;
-  const displayName = useMemo(() => {
-    if (!rawAddr) return '';
-    if (friendly) return friendly;
-    return shortAddr(rawAddr);
-  }, [rawAddr, friendly]);
-
-  const onConnect = async () => { await tonConnectUI.openModal(); };
-  const onDisconnect = async () => { try { await tonConnectUI.disconnect(); } catch {} };
-
-  const submit = async () => {
-    const clean = username.trim();
-    if (!connected) return;
-    if (!tgRegex.test(clean) || stars < 1) return;
-    alert(`Отправим ${stars} Stars пользователю @${clean} за ≈ ${fmtTon(totalTon)} TON`);
-    // тут позже вставим реальную логику покупок/мейкеру
+  // обработчики
+  const onUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim();
+    // только латиница, цифры и _
+    const cleaned = val.replace(/[^a-z0-9_]/gi, '');
+    setUsername(cleaned);
   };
 
-  const canBuy = connected && isNameValid && tgRegex.test(username.trim()) && stars >= 1;
+  const onStarsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // только цифры, позволяем пусто — это убирает баг “липкой 1”
+    const digits = e.target.value.replace(/\D/g, '');
+    setStarsInput(digits);
+  };
+
+  const switchLang = (l: 'ru' | 'en') => setLang(l);
+
+  const onBuy = async () => {
+    if (!isUserOk) {
+      alert(lang === 'ru'
+        ? 'Неверный ник. Разрешены латиница, цифры и _. Длина 5–32.'
+        : 'Invalid username. Use Latin letters, digits or _. Length 5–32.');
+      return;
+    }
+    if (!isStarsOk) {
+      alert(lang === 'ru' ? 'Минимум 1 звезда.' : 'Minimum is 1 star.');
+      return;
+    }
+    if (!isConnected) {
+      // открываем TonConnect, если не подключен
+      await tonConnectUI.openModal();
+      return;
+    }
+
+    // ТУТ будет реальная логика чекаута.
+    // Пока просто подтверждение.
+    const msg =
+      lang === 'ru'
+        ? `Отправим ${starsNum} Stars пользователю @${username} за ≈ ${amountTon} TON\nКошелёк: ${shortAddr}`
+        : `We will send ${starsNum} Stars to @${username} for ≈ ${amountTon} TON\nWallet: ${shortAddr}`;
+    alert(msg);
+  };
+
+  // ТЕКСТЫ
+  const t = {
+    title: lang === 'ru' ? 'Покупай Telegram Stars за TON' : 'Buy Telegram Stars with TON',
+    subtitle: lang === 'ru' ? 'Быстро. Без KYC. Прозрачно.' : 'Fast. No KYC. Transparent.',
+    formTitle: lang === 'ru' ? 'Купить Stars' : 'Buy Stars',
+    usernameLabel: lang === 'ru' ? '@Telegram username' : '@Telegram username',
+    usernameWillSend:
+      lang === 'ru'
+        ? (u: string) => (u ? `Будет отправлено @${u}` : '')
+        : (u: string) => (u ? `Will be sent to @${u}` : ''),
+    amountLabel: lang === 'ru' ? 'Сумма Stars' : 'Stars amount',
+    onlyInts: lang === 'ru' ? 'Только целые числа' : 'Integers only',
+    toPay: lang === 'ru' ? 'К оплате (TON)' : 'To pay (TON)',
+    buy: lang === 'ru' ? 'Купить Stars' : 'Buy Stars',
+    policy: lang === 'ru' ? 'Политика' : 'Privacy',
+    terms: lang === 'ru' ? 'Условия' : 'Terms',
+    exit: lang === 'ru' ? 'Выйти' : 'Logout'
+  };
 
   return (
-    <div style={{ padding: '24px 16px', maxWidth: 960, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, justifyContent: 'space-between', marginBottom: 24 }}>
+    <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 16px 64px' }}>
+      {/* Хедер */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/icon-512.png" width={28} height={28} alt="TonStars" style={{ borderRadius: 6 }} />
-          <div style={{ fontWeight: 700, fontSize: 20 }}>TonStars</div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {connected ? (
-            <>
-              <div
-                style={{
-                  background: 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04))',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 12,
-                  padding: '8px 12px',
-                  fontSize: 13,
-                  opacity: 0.95
-                }}
-                title={rawAddr || undefined}
-              >
-                {displayName}{balance != null ? ` • ${fmtTon(balance)} TON` : ''}
-              </div>
-              <button
-                onClick={onDisconnect}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 12,
-                  border: '1px solid rgba(255,255,255,0.16)',
-                  background: 'transparent',
-                  color: 'inherit'
-                }}
-              >
-                Выйти
-              </button>
-            </>
-          ) : (
+          <img src="/logo.png" alt="TonStars" width={36} height={36} style={{ borderRadius: 8 }} />
+          <div style={{ fontSize: 20, fontWeight: 700 }}>TonStars</div>
+          <div
+            style={{
+              marginLeft: 8, display: 'flex', gap: 6, border: '1px solid rgba(255,255,255,.12)',
+              borderRadius: 999, padding: '2px'
+            }}
+          >
             <button
-              onClick={onConnect}
+              onClick={() => switchLang('ru')}
               style={{
-                padding: '12px 16px',
-                borderRadius: 14,
-                border: 'none',
-                color: '#0b1324',
-                fontWeight: 700,
-                background: 'linear-gradient(90deg, #4bc0ff, #36f1c7)'
+                padding: '6px 10px', borderRadius: 999,
+                background: lang === 'ru' ? 'rgba(255,255,255,.1)' : 'transparent',
+                color: '#fff', border: 0
               }}
             >
-              Connect Wallet
+              RU
             </button>
+            <button
+              onClick={() => switchLang('en')}
+              style={{
+                padding: '6px 10px', borderRadius: 999,
+                background: lang === 'en' ? 'rgba(255,255,255,.1)' : 'transparent',
+                color: '#fff', border: 0
+              }}
+            >
+              EN
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Свой бейдж с friendly адресом */}
+          {isConnected && (
+            <div style={{
+              fontSize: 14, opacity: .85, padding: '6px 10px', borderRadius: 999,
+              border: '1px solid rgba(255,255,255,.16)'
+            }}>
+              {shortAddr}
+            </div>
           )}
+          {/* Кнопка TonConnect */}
+          <TonConnectButton />
         </div>
       </div>
 
-      {/* Hero */}
-      <h1 style={{ fontSize: 44, lineHeight: 1.1, margin: '0 0 8px' }}>
-        Покупай Telegram<br />Stars за TON
-      </h1>
-      <p style={{ opacity: 0.75, marginBottom: 24 }}>Быстро. Без KYC. Прозрачно.</p>
+      {/* Заголовок */}
+      <h1 style={{ fontSize: 44, lineHeight: 1.12, margin: '8px 0 8px' }}>{t.title}</h1>
+      <div style={{ opacity: 0.8, marginBottom: 22 }}>{t.subtitle}</div>
 
-      {/* Card */}
-      <div
-        style={{
-          borderRadius: 20,
-          border: '1px solid rgba(255,255,255,0.12)',
-          background: 'radial-gradient(120% 120% at 0% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 60%, transparent 100%)',
-          padding: 20,
-          maxWidth: 720
-        }}
-      >
-        <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>Купить Stars</div>
+      {/* Карточка формы */}
+      <div style={{
+        background: 'rgba(255,255,255,.03)',
+        border: '1px solid rgba(255,255,255,.08)',
+        borderRadius: 20,
+        padding: 20
+      }}>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>{t.formTitle}</div>
 
         {/* Username */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>@Telegram username</label>
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.usernameLabel}</label>
         <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="username"
+          type="text"
+          inputMode="text"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          inputMode="text"
-          pattern="[a-zA-Z0-9_]*"
+          placeholder="username"
+          value={username}
+          onChange={onUsernameChange}
           style={{
-            width: '100%',
-            padding: '14px 16px',
-            borderRadius: 12,
-            background: 'rgba(255,255,255,0.04)',
-            border: `1px solid ${isNameValid ? 'rgba(255,255,255,0.16)' : 'rgba(255,80,80,0.7)'}`,
-            color: 'inherit',
-            outline: 'none',
-            marginBottom: 6
+            width: '100%', height: 48, padding: '0 14px',
+            background: 'rgba(255,255,255,.04)',
+            border: `1px solid ${
+              username === '' ? 'rgba(255,255,255,.1)' : isUserOk ? 'rgba(59,180,74,.7)' : 'rgba(255,92,92,.7)'
+            }`,
+            borderRadius: 12, color: '#e8f0ff', outline: 'none'
           }}
         />
-        <div
-          style={{
-            minHeight: 20,
-            fontSize: 13,
-            color: isNameValid ? 'rgba(120,230,180,0.9)' : 'rgba(255,120,120,0.95)',
-            marginBottom: 10
-          }}
-        >
-          {nameHint}
+        <div style={{
+          minHeight: 20, marginTop: 6,
+          color: username && !isUserOk ? '#ff6b6b' : 'rgba(255,255,255,.55)', fontSize: 13
+        }}>
+          {username && !isUserOk ? (lang === 'ru'
+            ? 'Неверный формат. 5–32, латиница/цифры/_'
+            : 'Invalid format. 5–32, latin/digits/_')
+            : usernameHint[lang]}
         </div>
 
         {/* Stars */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>Сумма Stars</label>
+        <label style={{ display: 'block', marginTop: 14, marginBottom: 8, opacity: 0.9 }}>{t.amountLabel}</label>
         <input
-          value={String(stars)}
-          onChange={(e) => setStars(clampStars(e.target.value))}
-          type="number"
+          type="text"
           inputMode="numeric"
-          min={1}
-          step={1}
+          pattern="[0-9]*"
           placeholder="100"
+          value={starsInput}
+          onChange={onStarsChange}
           style={{
-            width: '100%',
-            padding: '14px 16px',
-            borderRadius: 12,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.16)',
-            color: 'inherit',
-            outline: 'none',
-            marginBottom: 8
+            width: '100%', height: 48, padding: '0 14px',
+            background: 'rgba(255,255,255,.04)',
+            border: `1px solid ${
+              starsInput === '' ? 'rgba(255,255,255,.1)' : isStarsOk ? 'rgba(59,180,74,.7)' : 'rgba(255,92,92,.7)'
+            }`,
+            borderRadius: 12, color: '#e8f0ff', outline: 'none'
           }}
-          onBlur={(e) => setStars(clampStars(e.target.value))}
         />
-        <div style={{ opacity: 0.7, fontSize: 13, marginBottom: 16 }}>OK — {stars} Stars</div>
-
-        {/* Total */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ opacity: 0.85 }}>К оплате (TON)</div>
-          <div style={{ fontWeight: 700 }}>≈ {fmtTon(totalTon)} TON</div>
+        <div style={{ minHeight: 20, marginTop: 6, opacity: .6, fontSize: 13 }}>
+          {lang === 'ru' ? 'OK — ' : 'OK — '}{starsNum} Stars
         </div>
 
-        {/* Buy */}
+        {/* Итог к оплате */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginTop: 8, marginBottom: 12, fontSize: 18
+        }}>
+          <div>{t.toPay}</div>
+          <div>≈ {amountTon} TON</div>
+        </div>
+
+        {/* Кнопка */}
         <button
-          onClick={submit}
+          onClick={onBuy}
           disabled={!canBuy}
           style={{
-            width: '100%',
-            padding: '16px',
-            borderRadius: 14,
-            border: 'none',
-            fontWeight: 700,
-            background: canBuy ? 'linear-gradient(90deg, #4bc0ff, #36f1c7)' : 'rgba(255,255,255,0.08)',
-            color: canBuy ? '#0b1324' : 'rgba(255,255,255,0.35)',
-            cursor: canBuy ? 'pointer' : 'not-allowed'
+            width: '100%', height: 54, border: 0, borderRadius: 12,
+            background: canBuy
+              ? 'linear-gradient(90deg,#4dabff,#39e6c2)'
+              : 'rgba(255,255,255,.08)',
+            color: canBuy ? '#001014' : 'rgba(255,255,255,.45)',
+            fontSize: 18, fontWeight: 700, cursor: canBuy ? 'pointer' : 'not-allowed'
           }}
         >
-          Купить Stars
+          {t.buy}
         </button>
       </div>
 
-      {/* Footer */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 28, maxWidth: 720 }}>
-        <a href="/privacy" style={{ opacity: 0.9 }}>Политика конфиденциальности</a>
-        <a href="/terms" style={{ opacity: 0.9 }}>Условия использования</a>
+      {/* футер */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16,
+        marginTop: 28, fontSize: 16
+      }}>
+        <a href="/privacy">{t.policy}</a>
+        <a href="/terms">{t.terms}</a>
       </div>
     </div>
   );
