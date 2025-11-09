@@ -9,10 +9,10 @@ import {
 
 type Props = {
   children: React.ReactNode;
-  lang: 'ru' | 'en';
+  lang?: 'ru' | 'en'; // делаем необязательным
 };
 
-export default function TonConnectProvider({ children, lang }: Props) {
+export default function TonConnectProvider({ children, lang = 'ru' }: Props) {
   return (
     <TonConnectUIProvider
       manifestUrl="https://tonstars.io/.well-known/tonconnect-manifest.json"
@@ -24,6 +24,5 @@ export default function TonConnectProvider({ children, lang }: Props) {
   );
 }
 
-// Реэкспорт хуков, чтобы импортировать из одного места
 export const useTonConnectUI = useTonConnectUIBase;
 export const useTonWallet = useTonWalletBase;
