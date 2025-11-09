@@ -204,12 +204,6 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div
-          className={amountStr !== '' ? (amtOk ? 'ok' : 'err') : undefined}
-          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-        >
-          {amountStr !== '' ? (amtOk ? t.ok(Math.max(amountNum, 0)) : t.amountErr) : t.ok(0)}
-        </div>
 
         {/* итоги */}
         <div
