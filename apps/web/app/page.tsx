@@ -258,7 +258,7 @@ export default function Page() {
         </button>
       </div>
 
-      {/* ── FOOTER + LANG: одна линия ───────────── */}
+      {/* ── FOOTER + LANG: одна горизонтальная линия по центру ───────────── */}
 <div
   style={{
     maxWidth: 840,
@@ -272,6 +272,7 @@ export default function Page() {
     flexWrap: 'wrap',
     opacity: 0.9,
     fontSize: 15,
+    textAlign: 'center',
   }}
 >
   {/* язык */}
