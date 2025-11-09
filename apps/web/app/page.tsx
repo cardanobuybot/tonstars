@@ -6,7 +6,6 @@ import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
 // Константа курса: 1 Star = 0.0002 TON
 const STAR_TON_RATE = 0.0002;
 
-// Тексты RU/EN
 const texts = {
   ru: {
     hero: 'Покупай Telegram Stars за TON',
@@ -17,6 +16,8 @@ const texts = {
     usernameHint: 'Введите ник без @. Допустимы латинские буквы, цифры и _ (5–32).',
     amountLabel: 'Сумма Stars',
     ok: (n: number) => `OK — ${n} Stars`,
+    usernameErr: 'Ник: латиница/цифры/_ (5–32)',
+    amountErr: 'Введите целое число ≥ 1',
     toPay: 'К оплате (TON)',
     balance: 'Баланс (TON)',
     buy: 'Купить Stars',
@@ -33,6 +34,8 @@ const texts = {
     usernameHint: 'Enter username without @. Latin letters, digits and _ (5–32).',
     amountLabel: 'Stars amount',
     ok: (n: number) => `OK — ${n} Stars`,
+    usernameErr: 'Username: latin/digits/_ (5–32)',
+    amountErr: 'Enter an integer ≥ 1',
     toPay: 'To pay (TON)',
     balance: 'Balance (TON)',
     buy: 'Buy Stars',
@@ -51,39 +54,38 @@ export default function Page() {
   const [username, setUsername] = useState('');
   const [amountStr, setAmountStr] = useState('100');
 
-  // Баланс подключённого кошелька
+  // Кошелёк TonConnect
   const wallet = useTonWallet();
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
-  const addressFriendly = wallet?.account?.address; // friendly при TonConnect 2
+  const addressFriendly = wallet?.account?.address;
 
   // Валидация username (латиница/цифры/_; 5–32)
-  const isValidUsername = useMemo(() => {
-    return /^[a-z0-9_]{5,32}$/i.test(username);
-  }, [username]);
+  const userOk = useMemo(() => /^[a-z0-9_]{5,32}$/i.test(username), [username]);
 
-  // Парсим количество (только целые >= 1)
-  const amount = useMemo(() => {
-    const n = parseInt(amountStr.replace(/\D/g, ''), 10);
-    return Number.isFinite(n) && n >= 1 ? n : 0;
+  // Парсим количество (разрешим пустую строку, а считать будем как 0)
+  const amountNum = useMemo(() => {
+    const onlyDigits = amountStr.replace(/[^\d]/g, '');
+    if (onlyDigits === '') return 0;
+    const n = parseInt(onlyDigits, 10);
+    return Number.isFinite(n) ? n : 0;
   }, [amountStr]);
 
-  const amountTon = useMemo(() => {
-    return Number((amount * STAR_TON_RATE).toFixed(4));
-  }, [amount]);
+  const amtOk = amountNum >= 1;
 
-  const canBuy = isValidUsername && amount >= 1 && !!wallet;
+  // Сумма в TON
+  const amountTon = useMemo(() => Number((amountNum * STAR_TON_RATE).toFixed(4)), [amountNum]);
 
-  // Подтяжка баланса при подключённом кошельке
+  const canBuy = userOk && amtOk && !!wallet;
+
+  // Баланс
   useEffect(() => {
     let aborted = false;
 
     async function fetchBalance(addr: string) {
       try {
-        // TonCenter v2 public endpoint (CORS разрешён)
         const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(addr)}`;
         const r = await fetch(url);
         const j = await r.json();
-        // Возвращает баланс в нанотонах строкой
         const nano = Number(j.result);
         if (!aborted && Number.isFinite(nano)) {
           setBalanceTon(Number((nano / 1e9).toFixed(4)));
@@ -103,37 +105,26 @@ export default function Page() {
     return () => { aborted = true; };
   }, [addressFriendly]);
 
-  // Обработчик покупки (заглушка — тут инициируешь свой flow TonConnect)
+  // Покупка (заглушка)
   const onBuy = () => {
     if (!canBuy) return;
     alert(
       lang === 'ru'
-        ? `Отправим ${amount} Stars пользователю @${username} за ~${amountTon} TON.\n(Тут вызываем TonConnect TX)`
-        : `Will send ${amount} Stars to @${username} for ~${amountTon} TON.\n(Here call TonConnect TX)`
+        ? `Отправим ${amountNum} Stars пользователю @${username} за ~${amountTon} TON.\n(Тут вызываем TonConnect TX)`
+        : `Will send ${amountNum} Stars to @${username} for ~${amountTon} TON.\n(Here call TonConnect TX)`
     );
   };
 
   return (
-    <div style={{ padding: '20px 16px 28px' }}>
+    <div className="container safe-bottom" style={{ padding: '20px 0 28px' }}>
       {/* HEADER */}
       <div data-hdr>
         <div data-hdr-left>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div style={{ fontWeight: 700, fontSize: 22 }}>TonStars</div>
+          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>TonStars</div>
 
           {/* языковая пилюля */}
-          <div
-            data-langpill
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              background: '#10131a',
-              padding: '2px 6px',
-              borderRadius: 16,
-              border: '1px solid rgba(255,255,255,0.06)'
-            }}
-          >
+          <div data-langpill>
             <button
               onClick={() => setLang('ru')}
               aria-label="RU"
@@ -166,7 +157,10 @@ export default function Page() {
         </div>
 
         <div data-hdr-right>
-          <TonConnectButton />
+          {/* wrapper чтобы у кнопки был data-атрибут для css-скейла */}
+          <div data-tc-button>
+            <TonConnectButton />
+          </div>
         </div>
       </div>
 
@@ -185,6 +179,7 @@ export default function Page() {
 
       {/* CARD */}
       <div
+        className="card"
         style={{
           background: 'linear-gradient(180deg,#0c0f14,#0b0e13)',
           border: '1px solid rgba(255,255,255,0.06)',
@@ -211,6 +206,7 @@ export default function Page() {
           placeholder={t.usernamePh}
           value={username}
           onChange={(e) => setUsername(e.target.value.trim())}
+          className={username ? (userOk ? 'input-ok' : 'input-err') : undefined}
           style={{
             width: '100%',
             height: 52,
@@ -222,8 +218,11 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div style={{ fontSize: 13, opacity: 0.7, marginTop: 8 }}>
-          {t.usernameHint}
+        <div
+          className={username ? (userOk ? 'ok' : 'err') : undefined}
+          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
+        >
+          {username ? (userOk ? t.ok(Math.max(amountNum, 0)) : t.usernameErr) : t.usernameHint}
         </div>
 
         {/* amount */}
@@ -236,6 +235,7 @@ export default function Page() {
           pattern="[0-9]*"
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
+          className={amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined}
           style={{
             width: '100%',
             height: 52,
@@ -247,8 +247,11 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div style={{ fontSize: 13, opacity: 0.7, marginTop: 8 }}>
-          {t.ok(Math.max(amount, 0))}
+        <div
+          className={amountStr !== '' ? (amtOk ? 'ok' : 'err') : undefined}
+          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
+        >
+          {amountStr !== '' ? (amtOk ? t.ok(Math.max(amountNum, 0)) : t.amountErr) : t.ok(0)}
         </div>
 
         {/* итоги */}
@@ -273,13 +276,11 @@ export default function Page() {
             marginTop: 4,
             marginBottom: 16,
             fontSize: 16,
-            opacity: 0.8
+            opacity: 0.85
           }}
         >
           <div>{t.balance}</div>
-          <div>
-            {balanceTon == null ? (wallet ? '—' : '—') : balanceTon.toFixed(4)} TON
-          </div>
+          <div>{balanceTon == null ? (wallet ? '— TON' : '— TON') : `${balanceTon.toFixed(4)} TON`}</div>
         </div>
 
         <button
@@ -304,30 +305,14 @@ export default function Page() {
       </div>
 
       {/* FOOTER */}
-      <div
-        style={{
-          maxWidth: 840,
-          margin: '26px auto 0',
-          paddingTop: 16,
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 12,
-          opacity: 0.85,
-          fontSize: 15,
-          flexWrap: 'wrap'
-        }}
-      >
-        <a href="/privacy" style={{ textDecoration: 'none', color: '#9fb4ff' }}>
-          {t.policy}
-        </a>
-        <span aria-hidden="true">|</span>
-        <a href="/terms" style={{ textDecoration: 'none', color: '#9fb4ff' }}>
-          {t.terms}
-        </a>
-        <span aria-hidden="true">|</span>
-        <span>{t.yearLine}</span>
+      <div className="footer">
+        <div className="footer__inner">
+          <a href="/privacy">{t.policy}</a>
+          <span aria-hidden="true">|</span>
+          <a href="/terms">{t.terms}</a>
+          <span aria-hidden="true">|</span>
+          <span>{t.yearLine}</span>
+        </div>
       </div>
     </div>
   );
