@@ -1,18 +1,22 @@
 'use client';
 import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
+import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 
 const MIN_STARS = 1;
-const TON_PER_STAR = 0.0002; // пример курса, можно изменить
+const TON_PER_STAR = 0.0002; // при необходимости поменяешь курс
 
 export default function Page() {
   const [lang, setLang] = useState<'ru' | 'en'>('ru');
   const [username, setUsername] = useState('');
   const [stars, setStars] = useState<number>(100);
-  const [connected, setConnected] = useState(false);
+
+  const wallet = useTonWallet();
+  const connected = !!wallet;
+  const [tonConnectUI] = useTonConnectUI();
 
   const amountTon = useMemo(
-    () => (stars >= MIN_STARS ? stars * TON_PER_STAR : 0),
+    () => (Number.isFinite(stars) && stars >= MIN_STARS ? stars * TON_PER_STAR : 0),
     [stars]
   );
 
@@ -48,8 +52,7 @@ export default function Page() {
   function normalizeStars(v: string) {
     const digits = v.replace(/[^\d]/g, '');
     if (!digits) return '';
-    const norm = String(parseInt(digits, 10));
-    return norm;
+    return String(parseInt(digits, 10));
   }
 
   function onStarsChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -62,19 +65,18 @@ export default function Page() {
     setStars(n);
   }
 
-  function onBuy() {
-    if (!connected) return;
-    if (!username || !/^[a-zA-Z0-9_]{4,32}$/.test(username)) {
-      alert(
-        lang === 'ru'
-          ? 'Введите корректный username без @'
-          : 'Enter valid username without @'
-      );
+  async function onBuy() {
+    if (!connected) {
+      await tonConnectUI.openModal(); // покажет модал выбора кошелька
       return;
     }
-    alert(
-      `OK: ${stars} stars to @${username} (~${amountTon.toFixed(4)} TON)`
-    );
+    if (!username || !/^[a-zA-Z0-9_]{4,32}$/.test(username)) {
+      alert(lang === 'ru' ? 'Введите корректный username без @' : 'Enter valid username without @');
+      return;
+    }
+
+    // TODO: добавить tonConnectUI.sendTransaction(...) с формированием пэйлоада
+    alert(`OK: ${stars} stars to @${username} (~${amountTon.toFixed(4)} TON)`);
   }
 
   return (
@@ -87,27 +89,12 @@ export default function Page() {
           TonStars
         </div>
 
-        <select
-          className="lang"
-          value={lang}
-          onChange={(e) => setLang(e.target.value as any)}
-        >
+        <select className="lang" value={lang} onChange={(e) => setLang(e.target.value as any)}>
           <option value="ru">RU</option>
           <option value="en">EN</option>
         </select>
 
-        <button
-          className="connect"
-          onClick={() => setConnected((v) => !v)}
-        >
-          {connected
-            ? lang === 'ru'
-              ? 'Кошелёк подключен'
-              : 'Wallet Connected'
-            : lang === 'ru'
-            ? 'Подключить кошелёк'
-            : 'Connect Wallet'}
-        </button>
+        <TonConnectButton />
       </div>
 
       <section className="hero">
@@ -146,18 +133,14 @@ export default function Page() {
           <span>≈ {amountTon.toFixed(4)} TON</span>
         </div>
 
-        <button
-          className={`primary ${connected ? 'enabled' : ''}`}
-          onClick={onBuy}
-          disabled={!connected}
-        >
+        <button className={`primary ${connected ? 'enabled' : ''}`} onClick={onBuy}>
           {connected ? ui.buy : ui.connect}
         </button>
       </section>
 
       <div className="footer">
-        <a href={lang === 'ru' ? '/privacy' : '/privacy'}>{ui.privacy}</a>
-        <a href={lang === 'ru' ? '/terms' : '/terms'}>{ui.terms}</a>
+        <a href="/privacy">{ui.privacy}</a>
+        <a href="/terms">{ui.terms}</a>
       </div>
     </div>
   );
