@@ -174,12 +174,15 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div
-          className={username ? (userOk ? 'ok' : 'err') : undefined}
-          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-        >
-          {username ? (userOk ? t.ok(Math.max(amountNum, 0)) : t.usernameErr) : t.usernameHint}
-        </div>
+        {/* helper under username: only hint or error */}
+{(!username || !userOk) && (
+  <div
+    className={username && !userOk ? 'err' : undefined}
+    style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
+  >
+    {username ? t.usernameErr : t.usernameHint}
+  </div>
+)}
 
         {/* amount */}
         <div style={{ height: 14 }} />
