@@ -95,7 +95,7 @@ export default function Page() {
   };
 
   return (
-    <div className="container safe-bottom" style={{ padding: '35px 16px 28px' }}>
+    <div className="container safe-bottom" style={{ padding: '28px 16px 28px' }}>
       {/* HEADER */}
       <div data-hdr>
         <div data-hdr-left>
