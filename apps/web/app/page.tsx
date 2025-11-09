@@ -1,169 +1,362 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { useTonConnectUI, useTonWallet } from './providers/TonConnectProvider';
+import React, { useEffect, useMemo, useState } from 'react';
+import TonConnectProvider, { useTonConnectUI, useTonWallet } from './providers/TonConnectProvider';
+
+// ====== Простая локализация (RU/EN) ======
+type Lang = 'ru' | 'en';
+
+const t: Record<Lang, Record<string, string>> = {
+  ru: {
+    title1: 'Покупай Telegram',
+    title2: 'Stars за TON',
+    subtitle: 'Быстро. Без KYC. Прозрачно.',
+    connect: 'Подключить кошелёк',
+    disconnect: 'Выйти',
+    connected: 'Подключено',
+    formTitle: 'Купить Stars',
+    usernameLabel: '@Telegram username',
+    usernameHint: 'Введите ник без @',
+    amountLabel: 'Сумма Stars',
+    amountOk: 'OK — {n} Stars',
+    payLabel: 'К оплате (TON)',
+    buy: 'Купить Stars',
+    policy: 'Политика',
+    terms: 'Условия',
+    invalidUsername: 'Только латиница, цифры и подчёркивание',
+    selectLang: 'Язык',
+    balance: 'Баланс',
+  },
+  en: {
+    title1: 'Buy Telegram',
+    title2: 'Stars with TON',
+    subtitle: 'Fast. No KYC. Transparent.',
+    connect: 'Connect Wallet',
+    disconnect: 'Disconnect',
+    connected: 'Connected',
+    formTitle: 'Buy Stars',
+    usernameLabel: '@Telegram username',
+    usernameHint: 'Enter username without @',
+    amountLabel: 'Stars amount',
+    amountOk: 'OK — {n} Stars',
+    payLabel: 'To pay (TON)',
+    buy: 'Buy Stars',
+    policy: 'Privacy',
+    terms: 'Terms',
+    invalidUsername: 'Latin letters, digits and underscore only',
+    selectLang: 'Language',
+    balance: 'Balance',
+  },
+};
 
 // 1 STAR = 0.0002 TON (1000 → 0.2 TON)
 const STAR_TON_RATE = 0.0002;
 
-function shortAddr(addr: string) {
-  return addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
+// helper: сокращение адреса
+function shortAddr(a: string, take = 4) {
+  if (!a) return '';
+  return `${a.slice(0, take)}…${a.slice(-take)}`;
 }
 
-// простая проверка username (только латиница, цифры и _; 5–32 символов)
-const tgUserRe = /^[a-z0-9_]{5,32}$/i;
+// helper: красиво форматнуть число TON
+function fmtTon(v: number) {
+  return (Math.round(v * 10000) / 10000).toFixed(4);
+}
 
+// Пытаемся найти .ton-имя через TonAPI. Если нет, оставляем сокращённый адрес.
+async function resolveFriendly(address: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://tonapi.io/v2/accounts/${address}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    // TonAPI может вернуть .dns.domain
+    const name = data?.dns?.domain as string | undefined;
+    return name || null;
+  } catch {
+    return null;
+  }
+}
+
+// Получить баланс в TON через TonAPI
+async function fetchBalance(address: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://tonapi.io/v2/accounts/${address}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const nano = Number(data?.balance ?? 0);
+    return nano / 1e9;
+  } catch {
+    return null;
+  }
+}
+
+// ====== Главная страница ======
 export default function Page() {
+  // Язык
+  const [lang, setLang] = useState<Lang>(() => (typeof window !== 'undefined' ? ((localStorage.getItem('lang') as Lang) || 'ru') : 'ru'));
+  const tr = t[lang];
+
+  useEffect(() => {
+    localStorage.setItem('lang', lang);
+  }, [lang]);
+
+  return (
+    <TonConnectProvider lang={lang}>
+      <HomeScreen lang={lang} setLang={setLang} />
+    </TonConnectProvider>
+  );
+}
+
+function HomeScreen({ lang, setLang }: { lang: Lang; setLang: (l: Lang) => void }) {
+  const tr = t[lang];
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
 
   const [username, setUsername] = useState('');
-  const [stars, setStars] = useState<string>('100');
+  const [amount, setAmount] = useState<number>(100);
+  const [usernameError, setUsernameError] = useState<string>('');
 
-  const parsedStars = useMemo(() => {
-    const n = Number(stars);
-    return Number.isFinite(n) && Number.isInteger(n) && n >= 1 ? n : NaN;
-  }, [stars]);
+  const [displayName, setDisplayName] = useState<string>('');
+  const [balance, setBalance] = useState<number | null>(null);
+  const connected = !!wallet;
 
-  const canBuy = Boolean(
-    wallet && wallet.account && tgUserRe.test(username) && !Number.isNaN(parsedStars)
-  );
+  // При подключении — тянем friendly имя и баланс
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (wallet?.account?.address) {
+        const raw = wallet.account.address;
+        const name = (await resolveFriendly(raw)) || shortAddr(raw, 4);
+        const bal = await fetchBalance(raw);
+        if (!cancelled) {
+          setDisplayName(name);
+          setBalance(bal);
+        }
+      } else {
+        setDisplayName('');
+        setBalance(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [wallet?.account?.address]);
 
-  const priceTon = useMemo(() => {
-    if (Number.isNaN(parsedStars)) return 0;
-    return +(parsedStars * STAR_TON_RATE).toFixed(4);
-  }, [parsedStars]);
+  // username: только латиница/цифры/_
+  function validateUsername(v: string) {
+    if (!/^[a-z0-9_]{1,32}$/i.test(v)) {
+      setUsernameError(t[lang].invalidUsername);
+      return false;
+    }
+    setUsernameError('');
+    return true;
+  }
 
-  const handleConnect = () => tonConnectUI.openModal();
+  // amount: целые, ≥1
+  function coerceAmount(v: string) {
+    const clean = v.replace(/[^\d]/g, '');
+    const n = Math.max(1, parseInt(clean || '0', 10));
+    setAmount(n);
+  }
 
-  const handleDisconnect = async () => {
-    try { await tonConnectUI.disconnect(); } catch {}
-  };
+  const priceTon = useMemo(() => amount * STAR_TON_RATE, [amount]);
 
-  const onBuy = () => {
-    if (!canBuy) return;
-    alert(`Отправим ${parsedStars} Stars пользователю @${username} за ≈ ${priceTon} TON`);
-    // тут позже добавим реальную отправку/чекаут
-  };
+  async function onBuy() {
+    if (!connected) {
+      await tonConnectUI.openModal(); // просим подключиться
+      return;
+    }
+    if (!validateUsername(username)) return;
+
+    // Здесь будет запрос на бэкенд/мейкеру (A-реселлеру) + TonConnect sendTransaction
+    alert(
+      lang === 'ru'
+        ? `Отправим ${amount} Stars пользователю @${username} за ≈ ${fmtTon(priceTon)} TON`
+        : `We will send ${amount} Stars to @${username} for ≈ ${fmtTon(priceTon)} TON`
+    );
+  }
+
+  async function onConnectClick() {
+    await tonConnectUI.openModal();
+  }
+
+  async function onDisconnect() {
+    await tonConnectUI.disconnect();
+  }
 
   return (
-    <div style={{minHeight:'100svh',background:'#0a0f1a',color:'#e5edf5'}}>
-      {/* header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:16,padding:'16px 20px',maxWidth:980,margin:'0 auto'}}>
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <img src="/logo-64.png" width={36} height={36} alt="TonStars" style={{borderRadius:8}}/>
-          <div style={{fontWeight:700,letterSpacing:0.3}}>TonStars</div>
-        </div>
-
-        {!wallet ? (
-          <button
-            onClick={handleConnect}
-            style={{
-              padding:'10px 16px',
-              borderRadius:12,
-              background:'linear-gradient(90deg,#3ea6ff,#00d1b2)',
-              color:'#081018',
-              border:'none',
-              fontWeight:700
-            }}
-          >
-            Connect Wallet
-          </button>
-        ) : (
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-            <span style={{padding:'8px 10px',border:'1px solid #233046',borderRadius:10,background:'#0e1624',fontSize:13,opacity:.9}}>
-              {shortAddr(wallet.account.address)}
-            </span>
-            <button
-              onClick={handleDisconnect}
-              style={{
-                padding:'8px 12px',
-                borderRadius:10,
-                background:'#172033',
-                color:'#9fb3c8',
-                border:'1px solid #233046'
-              }}
-            >
-              Выйти
-            </button>
+    <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#e5edf5' }}>
+      {/* Header */}
+      <div style={{ maxWidth: 980, margin: '0 auto', padding: '20px 16px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+          {/* Лого */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/icon.svg" alt="TonStars" width={28} height={28} style={{ borderRadius: 6 }} />
+            <div style={{ fontWeight: 700 }}>TonStars</div>
           </div>
-        )}
+
+          {/* Правый блок: язык + кошелёк */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value as Lang)}
+              style={{ background: '#111827', color: '#e5edf5', border: '1px solid #233047', borderRadius: 8, padding: '8px 10px' }}
+            >
+              <option value="ru">RU</option>
+              <option value="en">EN</option>
+            </select>
+
+            {!connected ? (
+              <button
+                onClick={onConnectClick}
+                style={{
+                  background: 'linear-gradient(135deg, #2b8cff, #1be2c5)',
+                  color: '#05101c',
+                  border: 'none',
+                  padding: '10px 16px',
+                  borderRadius: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {t[lang].connect}
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  style={{
+                    background: '#0f172a',
+                    border: '1px solid #233047',
+                    padding: '8px 10px',
+                    borderRadius: 10,
+                    fontWeight: 600,
+                  }}
+                  title={wallet?.account?.address}
+                >
+                  {displayName}{balance != null ? ` • ${fmtTon(balance)} TON` : ''}
+                </div>
+                <button
+                  onClick={onDisconnect}
+                  style={{
+                    background: 'transparent',
+                    color: '#9fb4cc',
+                    border: '1px solid #233047',
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    fontWeight: 600,
+                  }}
+                >
+                  {t[lang].disconnect}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* hero */}
-      <div style={{maxWidth:980,margin:'0 auto',padding:'8px 20px 32px'}}>
-        <h1 style={{fontSize:44,lineHeight:1.1,margin:'10px 0 8px'}}>Покупай Telegram Stars<br/>за TON</h1>
-        <p style={{opacity:.7,margin:'0 0 22px'}}>Быстро. Без KYC. Прозрачно.</p>
+      {/* Hero */}
+      <div style={{ maxWidth: 980, margin: '0 auto', padding: '32px 16px 0' }}>
+        <h1 style={{ margin: 0, fontSize: 40, lineHeight: 1.1 }}>
+          {t[lang].title1} <span style={{ color: '#9fb4cc' }}>Telegram</span>
+          <br />
+          {t[lang].title2}
+        </h1>
+        <p style={{ opacity: 0.8, marginTop: 8 }}>{t[lang].subtitle}</p>
+      </div>
 
-        <div style={{border:'1px solid #233046',background:'#0e1624',borderRadius:20,padding:22,maxWidth:640}}>
-          <h2 style={{fontSize:24,margin:'0 0 14px'}}>Купить Stars</h2>
+      {/* Card */}
+      <div style={{ maxWidth: 980, margin: '16px auto 0', padding: '0 16px 32px' }}>
+        <div
+          style={{
+            background: '#0f172a',
+            border: '1px solid #233047',
+            borderRadius: 16,
+            padding: 20,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>{t[lang].formTitle}</h2>
 
-          <label style={{display:'block',marginBottom:8,opacity:.9}}>@Telegram username</label>
+          {/* Username */}
+          <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t[lang].usernameLabel}</label>
           <input
-            value={username}
-            onChange={e => setUsername(e.target.value.trim().replace(/^@/, ''))}
-            placeholder="username"
             inputMode="text"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
+            placeholder="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value.replace(/^@+/, ''))}
+            onBlur={(e) => validateUsername(e.target.value)}
             style={{
-              width:'100%',padding:'12px 14px',borderRadius:12,
-              background:'#0a1220',border:'1px solid #233046',
-              color:'#e5edf5',outline:'none'
+              width: '100%',
+              background: '#0b1324',
+              border: `1px solid ${usernameError ? '#b04b4b' : '#233047'}`,
+              color: '#e5edf5',
+              outline: 'none',
+              padding: '12px 14px',
+              borderRadius: 12,
             }}
           />
-          <div style={{minHeight:18,marginTop:6,fontSize:13,opacity: tgUserRe.test(username) ? .6 : 1, color: tgUserRe.test(username) ? '#9fb3c8' : '#ff9c9c'}}>
-            {username ? (tgUserRe.test(username) ? `Будет отправлено @${username}` : 'Разрешены: латиница, цифры, _, длина 5–32') : 'Введите ник без @'}
+          <div style={{ height: 22, color: usernameError ? '#ff8d8d' : '#7ea2c4', marginTop: 6, fontSize: 14 }}>
+            {usernameError ? usernameError : (lang === 'ru' ? 'Будет отправлено' : 'Will be sent to')}{' '}
+            {username ? `@${username}` : ''}
           </div>
 
-          <label style={{display:'block',margin:'16px 0 8px',opacity:.9}}>Сумма Stars</label>
+          {/* Amount */}
+          <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t[lang].amountLabel}</label>
           <input
-            value={stars}
-            onChange={e => {
-              const v = e.target.value.replace(/[^\d]/g, '');
-              setStars(v);
-            }}
-            placeholder="100"
             inputMode="numeric"
+            pattern="[0-9]*"
+            value={String(amount)}
+            onChange={(e) => coerceAmount(e.target.value)}
             style={{
-              width:'100%',padding:'12px 14px',borderRadius:12,
-              background:'#0a1220',border:'1px solid #233046',
-              color:'#e5edf5',outline:'none'
+              width: '100%',
+              background: '#0b1324',
+              border: '1px solid #233047',
+              color: '#e5edf5',
+              outline: 'none',
+              padding: '12px 14px',
+              borderRadius: 12,
             }}
           />
-          <div style={{minHeight:18,marginTop:6,fontSize:13,opacity: Number.isNaN(parsedStars) ? 1 : .6, color: Number.isNaN(parsedStars) ? '#ff9c9c' : '#9fb3c8'}}>
-            {Number.isNaN(parsedStars) ? 'Только целые числа ≥ 1' : `OK — ${parsedStars} Stars`}
+          <div style={{ color: '#7ea2c4', marginTop: 6, fontSize: 14 }}>{t[lang].amountOk.replace('{n}', String(amount))}</div>
+
+          {/* Price */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 12 }}>
+            <div style={{ opacity: 0.9 }}>{t[lang].payLabel}</div>
+            <div style={{ fontWeight: 700 }}>≈ {fmtTon(priceTon)} TON</div>
           </div>
 
-          <div style={{display:'flex',justifyContent:'space-between',marginTop:16,marginBottom:12}}>
-            <div style={{opacity:.8}}>К оплате (TON)</div>
-            <div style={{fontWeight:700}}>≈ {priceTon.toFixed(4)} TON</div>
-          </div>
-
+          {/* Buy */}
           <button
-            disabled={!canBuy}
             onClick={onBuy}
+            disabled={!username || !!usernameError || amount < 1}
             style={{
-              width:'100%',
-              padding:'14px 16px',
-              borderRadius:14,
-              border:'none',
-              background: canBuy ? 'linear-gradient(90deg,#3ea6ff,#00d1b2)' : '#1a263a',
-              color: canBuy ? '#081018' : '#6d7f95',
-              fontWeight:800,
-              cursor: canBuy ? 'pointer' : 'not-allowed'
+              width: '100%',
+              background: 'linear-gradient(135deg, #2b8cff, #1be2c5)',
+              color: '#05101c',
+              border: 'none',
+              padding: '14px 18px',
+              borderRadius: 12,
+              fontWeight: 800,
+              opacity: !username || !!usernameError || amount < 1 ? 0.5 : 1,
+              cursor: !username || !!usernameError || amount < 1 ? 'not-allowed' : 'pointer',
             }}
           >
-            Купить Stars
+            {t[lang].buy}
           </button>
         </div>
       </div>
 
-      <footer style={{maxWidth:980,margin:'24px auto',padding:'0 20px 40px',display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,opacity:.9}}>
-        <a href="/privacy">Политика конфиденциальности</a>
-        <a href="/terms">Условия использования</a>
-      </footer>
+      {/* Footer */}
+      <div style={{ maxWidth: 980, margin: '0 auto', padding: '8px 16px 32px', display: 'flex', gap: 24 }}>
+        <a href={lang === 'ru' ? '/privacy' : '/privacy'} style={{ color: '#9fb4cc' }}>
+          {t[lang].policy}
+        </a>
+        <a href={lang === 'ru' ? '/terms' : '/terms'} style={{ color: '#9fb4cc' }}>
+          {t[lang].terms}
+        </a>
+      </div>
     </div>
   );
 }
