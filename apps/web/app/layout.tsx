@@ -6,14 +6,14 @@ export const metadata = {
 
 import './globals.css';
 import React from 'react';
-import TonProvider from './providers/TonProvider';
+import TonProvider from './providers/TonConnectProvider';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <link rel="manifest" href="/tonconnect-manifest.json" />
+        <link rel="manifest" href="/.well-known/tonconnect-manifest.json" />
       </head>
       <body>
         <TonProvider>{children}</TonProvider>
