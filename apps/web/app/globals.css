@@ -12,99 +12,66 @@ html, body {
 a { color: #9fb4cc; text-decoration: none; }
 button { cursor: pointer; font-family: inherit; }
 
-/* Карточки */
-form,
-.card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-}
+/* контейнер ширины */
+.container { max-width: 980px; margin: 0 auto; padding: 0 16px; }
 
-/* Контейнер */
-.container {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 0 16px;
-}
-
-/* HEADER */
-[data-hdr]{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
-
-[data-hdr-left]{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  min-width:0;
-  flex:1;
-}
-
+/* ── header layout ── */
+[data-hdr]{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+[data-hdr-left]{ display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
 [data-hdr-right]{ flex-shrink:0; }
 
-/* Кнопка TonConnect */
-[data-tc-button]{ white-space:nowrap; }
-@media (max-width: 560px){
-  [data-tc-button]{ transform:scale(.92); transform-origin:right center; }
-}
-@media (max-width: 440px){
-  [data-tc-button]{ transform:scale(.86); }
-}
-@media (max-width: 380px){
-  [data-tc-button]{ transform:scale(.82); }
-}
-
-/* ───── ВАЛИДАЦИЯ ───── */
-.ok  { color: #6ee7a8; }      /* зелёный текст */
-.err { color: #f87171; }      /* красный текст */
-
-.input-ok {
-  border-color: rgba(16,185,129,.65) !important;
-  box-shadow: 0 0 0 3px rgba(16,185,129,.15);
-}
-.input-err {
-  border-color: rgba(239,68,68,.65) !important;
-  box-shadow: 0 0 0 3px rgba(239,68,68,.12);
-}
-
-/* ───── FOOTER ───── */
-.footer {
-  border-top: 1px solid rgba(255,255,255,.06);
-  margin-top: 32px;
-  padding: 20px 0;
-}
-.footer__inner {
-  max-width: 840px;
-  margin: 0 auto;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:12px;
-  flex-wrap:wrap;
-  opacity:.85;
-  font-size:15px;
-}
-.footer a { opacity:.9; }
-.footer a:hover { opacity:1; }
-
-/* Языковой переключатель внизу */
-[data-langpill] {
-  margin: 36px auto 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: #10131a;
-  padding: 2px 6px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.06);
-}
-
-/* безопасный отступ под жестовую панель */
+/* безопасные отступы сверху/снизу */
 @supports (padding: max(0px)) {
   .safe-bottom { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+}
+
+/* TonConnect button лёгкое уменьшение на очень узких */
+[data-tc-button]{ white-space:nowrap; }
+@media (max-width: 560px){ [data-tc-button]{ transform:scale(.92); transform-origin:right center; } }
+@media (max-width: 440px){ [data-tc-button]{ transform:scale(.86); } }
+@media (max-width: 380px){ [data-tc-button]{ transform:scale(.82); } }
+
+/* инпуты ок/ошибка */
+.input-ok { border-color: rgba(0, 220, 130, 0.45) !important; box-shadow: 0 0 0 2px rgba(0, 220, 130, 0.15); }
+.input-err { border-color: rgba(255, 90, 90, 0.55) !important; box-shadow: 0 0 0 2px rgba(255, 90, 90, 0.12); }
+.ok { color: rgba(0, 220, 130, 0.9) !important; }
+.err { color: rgba(255, 120, 120, 0.95) !important; }
+
+/* ── нижняя планка: язык + ссылки ── */
+.bottom-bar{
+  max-width: 840px;
+  margin: 24px auto 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Language pill */
+[data-langpill]{
+  display:inline-flex; align-items:center; gap:8px;
+  background:#10131a; padding:4px; border-radius:16px;
+  border:1px solid rgba(255,255,255,0.06);
+}
+[data-langpill] button{
+  padding:6px 12px; border-radius:14px; border:1px solid rgba(255,255,255,0.08);
+  background:transparent; color:#cdd6f4; font-weight:700;
+}
+[data-langpill] .lang-active{
+  background:#0098ea; color:#fff; border-color:transparent;
+}
+
+/* Footer inline */
+.footer-inline{
+  display:flex; align-items:center; gap:12px; opacity:.9; font-size:15px;
+}
+.footer-inline a { opacity:.85; }
+.footer-inline a:hover{ opacity:1; }
+
+/* маленькие экраны — перенос по строкам и центрирование */
+@media (max-width: 480px){
+  .bottom-bar{ justify-content:center; text-align:center; gap:12px; }
 }
