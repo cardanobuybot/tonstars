@@ -22,7 +22,7 @@ const texts = {
     buy: 'Купить Stars',
     policy: 'Политика',
     terms: 'Условия',
-    yearLine: '© 2025 TonStars',
+    yearLine: '© 2025 TonStars'
   },
   en: {
     hero: 'Buy Telegram Stars with TON',
@@ -40,40 +40,49 @@ const texts = {
     buy: 'Buy Stars',
     policy: 'Privacy',
     terms: 'Terms',
-    yearLine: '© 2025 TonStars',
+    yearLine: '© 2025 TonStars'
   }
 };
 
 export default function Page() {
+  // язык
   const [lang, setLang] = useState<'ru' | 'en'>('ru');
   const t = texts[lang];
+
+  // форма
   const [username, setUsername] = useState('');
   const [amountStr, setAmountStr] = useState('100');
 
+  // кошелёк/баланс
   const wallet = useTonWallet();
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
+  // валидации
   const userOk = useMemo(() => /^[a-z0-9_]{5,32}$/i.test(username), [username]);
   const amountNum = useMemo(() => {
     const digits = amountStr.replace(/[^\d]/g, '');
     const n = parseInt(digits || '0', 10);
     return Number.isFinite(n) ? n : 0;
   }, [amountStr]);
-
   const amtOk = amountNum >= 1;
   const amountTon = useMemo(() => Number((amountNum * STAR_TON_RATE).toFixed(4)), [amountNum]);
   const canBuy = userOk && amtOk && !!wallet;
 
+  // баланс
   useEffect(() => {
     let aborted = false;
     async function fetchBalance(addr: string) {
       try {
-        const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(addr)}`;
+        const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(
+          addr
+        )}`;
         const r = await fetch(url);
         const j = await r.json();
         const nano = Number(j.result);
-        if (!aborted && Number.isFinite(nano)) setBalanceTon(Number((nano / 1e9).toFixed(4)));
+        if (!aborted && Number.isFinite(nano)) {
+          setBalanceTon(Number((nano / 1e9).toFixed(4)));
+        }
       } catch {
         if (!aborted) setBalanceTon(null);
       }
@@ -81,10 +90,15 @@ export default function Page() {
     if (addressFriendly) {
       setBalanceTon(null);
       fetchBalance(addressFriendly);
-    } else setBalanceTon(null);
-    return () => { aborted = true; };
+    } else {
+      setBalanceTon(null);
+    }
+    return () => {
+      aborted = true;
+    };
   }, [addressFriendly]);
 
+  // buy flow (заглушка)
   const onBuy = () => {
     if (!canBuy) return;
     alert(
@@ -95,9 +109,9 @@ export default function Page() {
   };
 
   return (
-    <div className="container safe-bottom" style={{ padding: '28px 16px 28px' }}>
-      {/* HEADER */}
-      <div data-hdr>
+    <div className="container safe-bottom" style={{ padding: '32px 16px 28px' }}>
+      {/* ── HEADER ───────────────────────────────────────────── */}
+      <div data-hdr style={{ marginBottom: 12 }}>
         <div data-hdr-left>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
           <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>TonStars</div>
@@ -109,23 +123,23 @@ export default function Page() {
         </div>
       </div>
 
-      {/* HERO */}
+      {/* ── HERO ─────────────────────────────────────────────── */}
       <h1
         style={{
-          margin: '32px 0 8px',
+          margin: '28px auto 8px',
           fontSize: 36,
           lineHeight: 1.1,
           letterSpacing: 0.2,
-          textAlign: 'center'
+          textAlign: 'center',
+          maxWidth: 680
         }}
       >
         {t.hero}
       </h1>
       <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>{t.sub}</div>
 
-      {/* CARD */}
+      {/* ── CARD ─────────────────────────────────────────────── */}
       <div
-        className="card"
         style={{
           background: 'linear-gradient(180deg,#0c0f14,#0b0e13)',
           border: '1px solid rgba(255,255,255,0.06)',
@@ -160,8 +174,10 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div className={username ? (userOk ? 'ok' : 'err') : undefined}
-          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}>
+        <div
+          className={username ? (userOk ? 'ok' : 'err') : undefined}
+          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
+        >
           {username ? (userOk ? t.ok(Math.max(amountNum, 0)) : t.usernameErr) : t.usernameHint}
         </div>
 
@@ -185,20 +201,40 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div className={amountStr !== '' ? (amtOk ? 'ok' : 'err') : undefined}
-          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}>
+        <div
+          className={amountStr !== '' ? (amtOk ? 'ok' : 'err') : undefined}
+          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
+        >
           {amountStr !== '' ? (amtOk ? t.ok(Math.max(amountNum, 0)) : t.amountErr) : t.ok(0)}
         </div>
 
-        {/* итог */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, marginBottom: 12, fontSize: 16, opacity: 0.95 }}>
+        {/* итоги */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: 10,
+            marginBottom: 12,
+            fontSize: 16,
+            opacity: 0.95
+          }}
+        >
           <div>{t.toPay}</div>
           <div>≈ {amountTon.toFixed(4)} TON</div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, marginBottom: 16, fontSize: 16, opacity: 0.85 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: 4,
+            marginBottom: 16,
+            fontSize: 16,
+            opacity: 0.85
+          }}
+        >
           <div>{t.balance}</div>
-          <div>{balanceTon == null ? (wallet ? '— TON' : '— TON') : `${balanceTon.toFixed(4)} TON`}</div>
+          <div>{balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}</div>
         </div>
 
         <button
@@ -222,41 +258,26 @@ export default function Page() {
         </button>
       </div>
 
-      {/* LANG SWITCHER */}
-      <div data-langpill>
-        <button
-          onClick={() => setLang('ru')}
-          aria-label="RU"
-          style={{
-            padding: '4px 10px',
-            borderRadius: 14,
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: lang === 'ru' ? '#0098ea' : 'transparent',
-            color: lang === 'ru' ? '#fff' : '#cdd6f4',
-            fontWeight: 700
-          }}
-        >
-          RU
-        </button>
-        <button
-          onClick={() => setLang('en')}
-          aria-label="EN"
-          style={{
-            padding: '4px 10px',
-            borderRadius: 14,
-            border: '1px solid rgba(255,255,255,0.08)',
-            background: lang === 'en' ? '#0098ea' : 'transparent',
-            color: lang === 'en' ? '#fff' : '#cdd6f4',
-            fontWeight: 700
-          }}
-        >
-          EN
-        </button>
-      </div>
+      {/* ── BOTTOM BAR: язык + футер в одну линию ───────────── */}
+      <div className="bottom-bar">
+        <div data-langpill>
+          <button
+            onClick={() => setLang('ru')}
+            aria-label="RU"
+            className={lang === 'ru' ? 'lang-active' : ''}
+          >
+            RU
+          </button>
+          <button
+            onClick={() => setLang('en')}
+            aria-label="EN"
+            className={lang === 'en' ? 'lang-active' : ''}
+          >
+            EN
+          </button>
+        </div>
 
-      {/* FOOTER */}
-      <div className="footer">
-        <div className="footer__inner">
+        <div className="footer-inline">
           <a href="/privacy">{t.policy}</a>
           <span aria-hidden="true">|</span>
           <a href="/terms">{t.terms}</a>
