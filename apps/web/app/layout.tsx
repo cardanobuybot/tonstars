@@ -9,14 +9,16 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const lang: 'ru' | 'en' = 'ru';
+
   return (
-    <html lang="ru">
+    <html lang={lang}>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="manifest" href="/tonconnect-manifest.json" />
       </head>
       <body>
-        <TonConnectProvider>{children}</TonConnectProvider>
+        <TonConnectProvider lang={lang}>{children}</TonConnectProvider>
       </body>
     </html>
   );
