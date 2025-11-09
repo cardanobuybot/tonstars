@@ -1,228 +1,389 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { useTonConnectUI } from './providers/TonConnectProvider';
+import Image from 'next/image';
+import { useTonConnectUI, useTonWallet } from './providers/TonConnectProvider';
 
-// 1 STAR = 0.0002 TON (как у нас было: 1000 → 0.2 TON)
+// 1 STAR = 0.0002 TON
 const STAR_TON_RATE = 0.0002;
 
-// Допустим юзер может купить от 1 до 100_000
-const MIN_STARS = 1;
-const MAX_STARS = 100000;
+// Примитивная локализация (RU/EN)
+const t = (lang: 'ru' | 'en') =>
+  lang === 'ru'
+    ? {
+        title1: 'Покупай Telegram',
+        title2: 'Stars за TON',
+        tagline: 'Быстро. Без KYC. Прозрачно.',
+        cardTitle: 'Купить Stars',
+        usernameLabel: '@Telegram username',
+        usernameHintOk: (u: string) => `Будет отправлено @${u}`,
+        usernameHintBad: 'Допустимы только латиница, цифры и _',
+        amountLabel: 'Сумма Stars',
+        amountHintOk: (n: number) => `OK — ${n} Stars`,
+        amountHintBad: 'Только целые числа ≥ 1',
+        payLabel: 'К оплате (TON)',
+        connect: 'Подключить кошелёк',
+        buy: 'Купить Stars',
+        privacy: 'Политика конфиденциальности',
+        terms: 'Условия использования',
+        confirmTitle: 'Подтвердите действие на www.tonstars.io',
+        confirmText: (u: string, n: number, ton: string) =>
+          `Отправим ${n} Stars пользователю @${u} за ≈ ${ton} TON`,
+      }
+    : {
+        title1: 'Buy Telegram',
+        title2: 'Stars with TON',
+        tagline: 'Fast. No KYC. Transparent.',
+        cardTitle: 'Buy Stars',
+        usernameLabel: '@Telegram username',
+        usernameHintOk: (u: string) => `Will be sent to @${u}`,
+        usernameHintBad: 'Only letters, digits and underscore are allowed',
+        amountLabel: 'Stars amount',
+        amountHintOk: (n: number) => `OK — ${n} Stars`,
+        amountHintBad: 'Integers only, ≥ 1',
+        payLabel: 'Total (TON)',
+        connect: 'Connect Wallet',
+        buy: 'Buy Stars',
+        privacy: 'Privacy Policy',
+        terms: 'Terms of Use',
+        confirmTitle: 'Confirm action on www.tonstars.io',
+        confirmText: (u: string, n: number, ton: string) =>
+          `We will send ${n} Stars to @${u} for ≈ ${ton} TON`,
+      };
 
-// Валидация Telegram username
-// Разрешаем опциональный @ в начале, дальше: латиница/цифры/подчёркивание
-// длина 5-32, начинаться с буквы
-const tgUsernameRegex = /^@?[a-zA-Z][a-zA-Z0-9_]{4,31}$/;
-
-function sanitizeUsername(input: string) {
-  // Убираем пробелы по краям и @ в начале
-  let v = input.trim();
-  if (v.startsWith('@')) v = v.slice(1);
-  // Оставляем только латиницу/цифры/_
-  v = v.replace(/[^a-zA-Z0-9_]/g, '');
-  // Ограничиваем длину 32
-  if (v.length > 32) v = v.slice(0, 32);
-  return v;
-}
-
-function validateUsername(u: string) {
-  // Проверяем на полный паттерн (мы не храним @, поэтому добавим его виртуально)
-  return tgUsernameRegex.test('@' + u);
-}
-
-function sanitizeStars(input: string) {
-  // Только цифры
-  let v = input.replace(/[^\d]/g, '');
-  // Убираем ведущие нули (но "0" пусть станет пустым)
-  v = v.replace(/^0+/, '');
-  return v;
-}
-
-function toStarsNumber(v: string) {
-  if (!v) return NaN;
-  const n = Number(v);
-  if (!Number.isInteger(n)) return NaN;
-  if (n < MIN_STARS || n > MAX_STARS) return NaN;
-  return n;
+// очень простая «переключалка»: по умолчанию RU
+function useLang(): ['ru' | 'en', (l: 'ru' | 'en') => void] {
+  const [lang, setLang] = useState<'ru' | 'en'>(
+    (typeof window !== 'undefined' &&
+      (localStorage.getItem('lang') as 'ru' | 'en')) || 'ru'
+  );
+  const set = (l: 'ru' | 'en') => {
+    setLang(l);
+    if (typeof window !== 'undefined') localStorage.setItem('lang', l);
+  };
+  return [lang, set];
 }
 
 export default function Page() {
+  const [lang, setLang] = useLang();
+  const tr = useMemo(() => t(lang), [lang]);
+
   const [username, setUsername] = useState('');
-  const [starsRaw, setStarsRaw] = useState('100'); // дефолт 100
+  const [rawAmount, setRawAmount] = useState('100');
+
+  // TON Connect
   const [tonConnectUI] = useTonConnectUI();
+  const wallet = useTonWallet(); // null, если не подключен
 
-  const usernameSan = useMemo(() => sanitizeUsername(username), [username]);
-  const usernameValid = useMemo(() => validateUsername(usernameSan), [usernameSan]);
+  // Валидация username: только латиница/цифры/_ и 5..32 символов (как у Telegram)
+  const usernameValid = useMemo(() => {
+    const u = username.trim();
+    if (!u) return false;
+    if (u.length < 5 || u.length > 32) return false;
+    return /^[a-zA-Z0-9_]+$/.test(u);
+  }, [username]);
 
-  const starsSan = useMemo(() => sanitizeStars(starsRaw), [starsRaw]);
-  const stars = useMemo(() => toStarsNumber(starsSan), [starsSan]);
-  const starsValid = Number.isInteger(stars);
+  // Валидация количества: целое ≥ 1, без ведущих нулей
+  const amount = useMemo(() => {
+    const cleaned = rawAmount.replace(/[^0-9]/g, '');
+    if (cleaned === '') return NaN;
+    if (/^0\d+/.test(cleaned)) return NaN;
+    const num = Number(cleaned);
+    if (!Number.isInteger(num) || num < 1) return NaN;
+    return num;
+  }, [rawAmount]);
 
-  const tonAmount = useMemo(() => {
-    if (!starsValid) return 0;
-    return +(stars! * STAR_TON_RATE).toFixed(4);
-  }, [starsValid, stars]);
+  const tonToPay = useMemo(() => {
+    if (!Number.isFinite(amount)) return 0;
+    return Number((amount * STAR_TON_RATE).toFixed(4));
+  }, [amount]);
 
-  const canSubmit = usernameValid && starsValid;
+  const canSubmit = wallet && usernameValid && Number.isFinite(amount);
 
-  async function handleConnect() {
-    try {
-      await tonConnectUI.openModal();
-    } catch {}
-  }
+  const onSubmit = async () => {
+    // если кошелёк НЕ подключён — открываем модал и выходим
+    if (!wallet) {
+      tonConnectUI.openModal();
+      return;
+    }
+    if (!usernameValid || !Number.isFinite(amount)) return;
 
-  async function handleBuy() {
-    if (!canSubmit) return;
-    // здесь будет логика формирования транзакции
-    // пока просто алерт
-    alert(`Отправим ${stars} Stars пользователю @${usernameSan} за ≈ ${tonAmount} TON`);
-  }
+    const ok = window.confirm(
+      `${tr.confirmTitle}\n\n${tr.confirmText(
+        username.trim(),
+        amount as number,
+        tonToPay.toFixed(4)
+      )}`
+    );
+    if (!ok) return;
+
+    // здесь дальше твой реальный flow покупки
+    // TODO: создать ордер на backend, получить payload, tonConnectUI.sendTransaction(...)
+    alert('Демо: транзакция ещё не реализована (backend/payload).');
+  };
 
   return (
-    <main style={{ minHeight: '100vh', background: '#0a0f1a', color: '#e5edf5' }}>
-      <div style={{ maxWidth: 880, margin: '0 auto', padding: '24px 16px' }}>
-        {/* Шапка */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 8,
-            background: 'linear-gradient(135deg,#00e1ff,#0066ff)'
-          }} />
+    <div
+      style={{
+        minHeight: '100vh',
+        background: '#0a0f1a',
+        color: '#e5edf5',
+      }}
+    >
+      {/* Хедер */}
+      <header
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '16px 20px',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Image
+            src="/icon-512.png"
+            alt="TonStars"
+            width={40}
+            height={40}
+            style={{ borderRadius: 8 }}
+          />
           <div style={{ fontWeight: 700, fontSize: 20 }}>TonStars</div>
-          <div style={{ marginLeft: 'auto' }}>
-            <button
-              onClick={handleConnect}
-              style={{
-                padding: '10px 16px',
-                borderRadius: 12,
-                border: '1px solid rgba(255,255,255,0.1)',
-                background: 'linear-gradient(135deg,#1a7cff,#15e0ff)',
-                color: '#000',
-                fontWeight: 700
-              }}
-            >
-              Connect Wallet
-            </button>
-          </div>
         </div>
 
-        {/* Заголовок */}
-        <h1 style={{ fontSize: 36, lineHeight: 1.2, margin: '8px 0 4px' }}>
-          Покупай Telegram Stars<br />за TON
-        </h1>
-        <p style={{ opacity: 0.7, marginBottom: 24 }}>Быстро. Без KYC. Прозрачно.</p>
-
-        {/* Карточка формы */}
-        <div style={{
-          borderRadius: 16,
-          padding: 20,
-          background: 'rgba(255,255,255,0.03)',
-          border: '1px solid rgba(255,255,255,0.08)'
-        }}>
-          <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Купить Stars</div>
-
-          {/* Username */}
-          <label style={{ display: 'block', fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
-            @Telegram username
-          </label>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onBlur={() => setUsername(usernameSan)} // нормализуем при блюре
-            placeholder="username"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value as 'ru' | 'en')}
             style={{
-              width: '100%',
-              background: 'rgba(255,255,255,0.02)',
-              border: `1px solid ${username.length === 0 ? 'rgba(255,255,255,0.12)' : (usernameValid ? 'rgba(0,200,140,0.7)' : 'rgba(255,100,100,0.7)')}`,
+              background: '#131a28',
               color: '#e5edf5',
-              borderRadius: 12,
-              padding: '12px 14px',
-              outline: 'none',
-              marginBottom: 6
+              border: '1px solid #22304a',
+              borderRadius: 10,
+              padding: '10px 12px',
             }}
-          />
-          <div style={{ fontSize: 12, minHeight: 18, color: username.length === 0 ? '#9fb2c8' : (usernameValid ? '#7fe3c4' : '#ff9c9c') }}>
-            {username.length === 0
-              ? 'Допустимы латиница, цифры и _ • 5–32 символов • можно вводить с @'
-              : usernameValid
-                ? `Будет отправлено @${usernameSan}`
-                : 'Неверный формат. Пример: @tonstars_bot, @abcde, a_z09 (5–32)'}
+          >
+            <option value="ru">RU</option>
+            <option value="en">EN</option>
+          </select>
+
+          <button
+            onClick={() => tonConnectUI.openModal()}
+            style={{
+              padding: '10px 16px',
+              background:
+                'linear-gradient(90deg, #1ea0ff 0%, #00c2b8 100%)',
+              border: 'none',
+              borderRadius: 12,
+              color: '#0a0f1a',
+              fontWeight: 700,
+            }}
+          >
+            {lang === 'ru' ? 'Connect Wallet' : 'Connect Wallet'}
+          </button>
+        </div>
+      </header>
+
+      {/* Герой */}
+      <section style={{ padding: '12px 20px 0' }}>
+        <h1
+          style={{
+            fontSize: 34,
+            lineHeight: 1.15,
+            margin: 0,
+            fontWeight: 800,
+          }}
+        >
+          {tr.title1} <br />
+          {tr.title2}
+        </h1>
+        <p style={{ opacity: 0.7, marginTop: 10 }}>{tr.tagline}</p>
+      </section>
+
+      {/* Карточка покупки */}
+      <main style={{ padding: 20 }}>
+        <div
+          style={{
+            maxWidth: 720,
+            margin: '0 auto',
+            background: '#0f1524',
+            border: '1px solid #1d2a44',
+            borderRadius: 16,
+            padding: 16,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 22,
+              fontWeight: 800,
+              marginBottom: 10,
+            }}
+          >
+            {tr.cardTitle}
           </div>
 
-          {/* Stars */}
-          <label style={{ display: 'block', fontSize: 14, opacity: 0.8, margin: '14px 0 8px' }}>
-            Сумма Stars
+          {/* Username */}
+          <label
+            style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
+          >
+            {tr.usernameLabel}
+          </label>
+          <input
+            inputMode="latin"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={{
+              width: '100%',
+              background: '#0a101c',
+              color: '#e5edf5',
+              border: `1px solid ${
+                username.length === 0
+                  ? '#22304a'
+                  : usernameValid
+                  ? '#2bde73'
+                  : '#e86868'
+              }`,
+              borderRadius: 12,
+              padding: '14px 16px',
+              outline: 'none',
+            }}
+          />
+          <div
+            style={{
+              fontSize: 12,
+              marginTop: 6,
+              color:
+                username.length === 0
+                  ? '#90a0bf'
+                  : usernameValid
+                  ? '#2bde73'
+                  : '#e86868',
+            }}
+          >
+            {username.length === 0
+              ? ' '
+              : usernameValid
+              ? tr.usernameHintOk(username.trim())
+              : tr.usernameHintBad}
+          </div>
+
+          {/* Amount */}
+          <div style={{ height: 12 }} />
+          <label
+            style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
+          >
+            {tr.amountLabel}
           </label>
           <input
             inputMode="numeric"
-            pattern="\d*"
-            value={starsSan}
-            onChange={(e) => setStarsRaw(e.target.value)}
-            onBlur={() => setStarsRaw(starsSan || '100')}
+            pattern="[0-9]*"
+            value={rawAmount}
+            onChange={(e) => setRawAmount(e.target.value)}
+            onBlur={() => {
+              // чистим ввод
+              const cleaned = rawAmount.replace(/[^0-9]/g, '');
+              if (cleaned === '' || /^0\d+/.test(cleaned)) {
+                setRawAmount(''); // заставит показать ошибку
+              } else {
+                setRawAmount(String(Number(cleaned)));
+              }
+            }}
             placeholder="100"
             style={{
               width: '100%',
-              background: 'rgba(255,255,255,0.02)',
-              border: `1px solid ${starsSan === '' ? 'rgba(255,255,255,0.12)' : (starsValid ? 'rgba(0,200,140,0.7)' : 'rgba(255,100,100,0.7)')}`,
+              background: '#0a101c',
               color: '#e5edf5',
+              border: `1px solid ${
+                rawAmount.length === 0
+                  ? '#22304a'
+                  : Number.isFinite(amount)
+                  ? '#2bde73'
+                  : '#e86868'
+              }`,
               borderRadius: 12,
-              padding: '12px 14px',
+              padding: '14px 16px',
               outline: 'none',
-              marginBottom: 6
             }}
           />
-          <div style={{ fontSize: 12, minHeight: 18, color: starsSan === '' ? '#9fb2c8' : (starsValid ? '#7fe3c4' : '#ff9c9c') }}>
-            {starsSan === ''
-              ? `Только целые числа ≥ ${MIN_STARS}`
-              : starsValid
-                ? `OK — ${stars} Stars`
-                : `Неверное значение. Диапазон: ${MIN_STARS}–${MAX_STARS}`}
+          <div
+            style={{
+              fontSize: 12,
+              marginTop: 6,
+              color:
+                rawAmount.length === 0
+                  ? '#90a0bf'
+                  : Number.isFinite(amount)
+                  ? '#2bde73'
+                  : '#e86868',
+            }}
+          >
+            {rawAmount.length === 0
+              ? ' '
+              : Number.isFinite(amount)
+              ? tr.amountHintOk(Number(amount))
+              : tr.amountHintBad}
           </div>
 
-          {/* Итог */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: 12,
-            marginBottom: 12,
-            fontWeight: 600
-          }}>
-            <div>К оплате (TON)</div>
-            <div>≈ {tonAmount.toFixed(4)} TON</div>
+          {/* Сумма TON */}
+          <div style={{ height: 16 }} />
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontWeight: 700,
+            }}
+          >
+            <span>{tr.payLabel}</span>
+            <span>≈ {tonToPay.toFixed(4)} TON</span>
           </div>
 
-          {/* Кнопка Купить */}
+          {/* Кнопка */}
+          <div style={{ height: 14 }} />
           <button
-            disabled={!canSubmit}
-            onClick={handleBuy}
+            onClick={onSubmit}
+            disabled={!wallet && !usernameValid && !Number.isFinite(amount)}
             style={{
               width: '100%',
               padding: '14px 16px',
-              borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: canSubmit
-                ? 'linear-gradient(135deg,#1a7cff,#15e0ff)'
-                : 'linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.06))',
-              color: canSubmit ? '#06121f' : '#8aa1b9',
+              border: 'none',
+              borderRadius: 14,
               fontWeight: 800,
-              cursor: canSubmit ? 'pointer' : 'not-allowed',
-              transition: 'transform .06s ease'
+              color: '#0a0f1a',
+              background:
+                'linear-gradient(90deg, #1ea0ff 0%, #00c2b8 100%)',
+              opacity: canSubmit ? 1 : 1, // кнопка активна, но логика внутри решает
+              cursor: 'pointer',
             }}
           >
-            Купить Stars
+            {wallet ? tr.buy : tr.connect}
           </button>
         </div>
+      </main>
 
-        {/* Футер */}
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginTop: 20, opacity: 0.8 }}>
-          <a href="/privacy">Политика конфиденциальности</a>
-          <a href="/terms">Условия использования</a>
-        </div>
-      </div>
-    </main>
+      {/* Футер */}
+      <footer
+        style={{
+          maxWidth: 720,
+          margin: '0 auto',
+          padding: '10px 20px 40px',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 12,
+        }}
+      >
+        <a href="/privacy" style={{ color: '#a9c1ff' }}>
+          {tr.privacy}
+        </a>
+        <a href="/terms" style={{ color: '#a9c1ff' }}>
+          {tr.terms}
+        </a>
+      </footer>
+    </div>
   );
 }
