@@ -1,13 +1,25 @@
 'use client';
 
 import React from 'react';
-import { TonConnectUIProvider } from '@tonconnect/ui-react';
+import {
+  TonConnectUIProvider,
+  useTonConnectUI,
+  useTonWallet
+} from '@tonconnect/ui-react';
 
-export default function TonProvider({ children }: { children: React.ReactNode }) {
-  const manifestUrl =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/.well-known/tonconnect-manifest.json`
-      : '/.well-known/tonconnect-manifest.json';
+// Реэкспортируем хуки, чтобы их можно было импортировать из этого файла
+export { useTonConnectUI, useTonWallet };
 
-  return <TonConnectUIProvider manifestUrl={manifestUrl}>{children}</TonConnectUIProvider>;
+// Корректный manifestUrl для клиентской и серверной среды
+const manifestUrl =
+  typeof window !== 'undefined'
+    ? `${window.location.origin}/.well-known/tonconnect-manifest.json`
+    : '/.well-known/tonconnect-manifest.json';
+
+export default function TonConnectProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <TonConnectUIProvider manifestUrl={manifestUrl}>
+      {children}
+    </TonConnectUIProvider>
+  );
 }
