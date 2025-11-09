@@ -1,29 +1,30 @@
-// apps/web/app/providers/TonConnectProvider.tsx
 'use client';
 
-import React from 'react';
+import React, { ReactNode } from 'react';
 import {
   TonConnectUIProvider,
-  useTonWallet,
-  useTonConnectUI
+  useTonConnectUI as useTonConnectUIBase,
+  useTonWallet as useTonWalletBase
 } from '@tonconnect/ui-react';
 
-type Props = {
-  lang: 'ru' | 'en';
-  children: React.ReactNode;
-};
+type Lang = 'ru' | 'en';
 
-export default function TonConnectProvider({ lang, children }: Props) {
+export default function TonConnectProvider({
+  children,
+  lang = 'ru'
+}: {
+  children: ReactNode;
+  lang?: Lang;
+}) {
   return (
     <TonConnectUIProvider
       manifestUrl="https://tonstars.io/.well-known/tonconnect-manifest.json"
       language={lang}
-      // theme убрали, пусть берёт системную/по умолчанию
     >
       {children}
     </TonConnectUIProvider>
   );
 }
 
-// реэкспорт хуков
-export { useTonWallet, useTonConnectUI };
+export const useTonConnectUI = useTonConnectUIBase;
+export const useTonWallet = useTonWalletBase;
