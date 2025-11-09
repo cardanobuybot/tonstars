@@ -95,7 +95,7 @@ export default function Page() {
   };
 
   return (
-    <div className="container safe-bottom" style={{ padding: '36px 0 28px' }}>
+    <div className="container safe-bottom" style={{ padding: '20x 16px 28px' }}>
       {/* HEADER */}
       <div data-hdr>
         <div data-hdr-left>
@@ -231,8 +231,8 @@ export default function Page() {
             padding: '4px 10px',
             borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.08)',
-            background: lang === 'ru' ? '#fff' : 'transparent',
-            color: lang === 'ru' ? '#000' : '#cdd6f4',
+            background: lang === 'ru' ? '#0098ea' : 'transparent',
+            color: lang === 'ru' ? '#fff' : '#cdd6f4',
             fontWeight: 700
           }}
         >
@@ -245,8 +245,8 @@ export default function Page() {
             padding: '4px 10px',
             borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.08)',
-            background: lang === 'en' ? '#fff' : 'transparent',
-            color: lang === 'en' ? '#000' : '#cdd6f4',
+            background: lang === 'en' ? '#0098ea' : 'transparent',
+            color: lang === 'en' ? '#fff' : '#cdd6f4',
             fontWeight: 700
           }}
         >
