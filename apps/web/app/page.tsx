@@ -1,102 +1,26 @@
 'use client';
-
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  TonConnectButton,
-  useTonConnectUI,
-  useTonWallet,
-} from '@tonconnect/ui-react';
-
-const STAR_TON_RATE = 0.0002;
-
-function formatTon(v: number) {
-  if (!isFinite(v)) return '0.0000';
-  return v.toFixed(4);
-}
-
-async function fetchTonBalance(address: string): Promise<number> {
-  const r = await fetch(`https://tonapi.io/v2/accounts/${address}`, {
-    cache: 'no-store',
-  });
-  if (!r.ok) throw new Error('Balance request failed');
-  const data = await r.json();
-  const nano: number = Number(data.balance ?? 0);
-  return nano / 1e9;
-}
-
-const USERNAME_REGEX = /^[a-zA-Z0-9_]{5,32}$/;
+import React, { useState, useEffect } from 'react';
+import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 
 export default function Page() {
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
 
-  const [lang, setLang] = useState<'ru' | 'en'>('ru');
   const [username, setUsername] = useState('');
-  const [amountStr, setAmountStr] = useState('100');
-
-  const amount = useMemo(() => {
-    if (amountStr.trim() === '') return 0;
-    const v = Number(amountStr);
-    return Number.isFinite(v) ? Math.floor(Math.max(0, v)) : 0;
-  }, [amountStr]);
-
-  const amountTon = useMemo(() => amount * STAR_TON_RATE, [amount]);
-  const usernameValid = useMemo(() => USERNAME_REGEX.test(username), [username]);
-
-  const [balanceTon, setBalanceTon] = useState<number | null>(null);
-  const [balLoading, setBalLoading] = useState(false);
-  const address = wallet?.account?.address;
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (!address) {
-        setBalanceTon(null);
-        return;
-      }
-      try {
-        setBalLoading(true);
-        const b = await fetchTonBalance(address);
-        if (!cancelled) setBalanceTon(b);
-      } catch {
-        if (!cancelled) setBalanceTon(null);
-      } finally {
-        if (!cancelled) setBalLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [address]);
-
-  function onBuy() {
-    if (!wallet) {
-      tonConnectUI.openModal();
-      return;
-    }
-    alert(
-      `Отправим ${amount} Stars пользователю @${username} за ~ ${formatTon(
-        amountTon
-      )} TON`
-    );
-  }
-
-  const notEnough =
-    balanceTon !== null && amountTon > 0 && amountTon > balanceTon;
-  const canBuy =
-    !!wallet && usernameValid && amount >= 1 && amountTon > 0 && !notEnough;
+  const [stars, setStars] = useState('');
+  const [amountTon, setAmountTon] = useState(0);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [lang, setLang] = useState<'ru' | 'en'>('ru');
 
   const texts = {
     ru: {
       title: 'Покупай Telegram Stars за TON',
-      fast: 'Быстро. Без KYC. Прозрачно.',
-      buyBox: 'Купить Stars',
-      userLabel: '@Telegram username',
-      userHint:
-        'Введите ник без @. Допустимы латинские буквы, цифры и _ (5–32).',
-      amountLabel: 'Сумма Stars',
-      ok: (n: number) => `OK — ${n || 0} Stars`,
+      subtitle: 'Быстро. Без KYC. Прозрачно.',
+      username: '@Telegram username',
+      usernamePlaceholder: 'username',
+      usernameHint: 'Введите ник без @. Допустимы латинские буквы, цифры и _ (5–32).',
+      amount: 'Сумма Stars',
+      ok: 'OK',
       toPay: 'К оплате (TON)',
       balance: 'Баланс (TON)',
       buy: 'Купить Stars',
@@ -105,13 +29,12 @@ export default function Page() {
     },
     en: {
       title: 'Buy Telegram Stars with TON',
-      fast: 'Fast. No KYC. Transparent.',
-      buyBox: 'Buy Stars',
-      userLabel: '@Telegram username',
-      userHint:
-        'Enter username without @. Latin letters, digits and _ (5–32).',
-      amountLabel: 'Stars amount',
-      ok: (n: number) => `OK — ${n || 0} Stars`,
+      subtitle: 'Fast. No KYC. Transparent.',
+      username: '@Telegram username',
+      usernamePlaceholder: 'username',
+      usernameHint: 'Enter username without @. Latin letters, digits and _ (5–32).',
+      amount: 'Stars amount',
+      ok: 'OK',
       toPay: 'To pay (TON)',
       balance: 'Balance (TON)',
       buy: 'Buy Stars',
@@ -122,56 +45,65 @@ export default function Page() {
 
   const t = texts[lang];
 
+  useEffect(() => {
+    if (wallet) {
+      // эмуляция получения баланса — позже можно подцепить API
+      setBalance(5.8294);
+    } else {
+      setBalance(null);
+    }
+  }, [wallet]);
+
+  useEffect(() => {
+    const num = parseFloat(stars);
+    if (!isNaN(num) && num > 0) {
+      setAmountTon(num * 0.0002);
+    } else {
+      setAmountTon(0);
+    }
+  }, [stars]);
+
+  const onBuy = () => {
+    if (!wallet) {
+      tonConnectUI.openModal();
+      return;
+    }
+    alert(`Отправляем ${amountTon} TON пользователю @${username}`);
+  };
+
+  const canBuy = username.length >= 5 && stars !== '' && amountTon > 0;
+
   return (
-    <div
+    <main
       style={{
         maxWidth: 820,
         margin: '0 auto',
-        padding: 16,
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
+        padding: 20,
+        color: '#fff',
+        fontFamily: 'Inter, sans-serif',
       }}
     >
-      {/* header */}
+      {/* HEADER */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
           justifyContent: 'space-between',
-          marginBottom: 18,
+          marginBottom: 40,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img
-            src="/icon-512.png"
-            alt="TonStars"
-            width={32}
-            height={32}
-            style={{ borderRadius: 6 }}
-          />
-          <div style={{ fontSize: 20, fontWeight: 700 }}>TonStars</div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div
-            style={{
-              display: 'flex',
-              background: 'rgba(255,255,255,0.06)',
-              borderRadius: 12,
-              padding: 2,
-            }}
-          >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
+          <div style={{ fontWeight: 700, fontSize: 22 }}>TonStars</div>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 12 }}>
             <button
               onClick={() => setLang('ru')}
               style={{
-                padding: '6px 10px',
-                borderRadius: 10,
                 background: lang === 'ru' ? '#fff' : 'transparent',
                 color: lang === 'ru' ? '#000' : '#fff',
-                fontWeight: 600,
-                border: 'none',
+                borderRadius: 8,
+                padding: '4px 8px',
+                border: '1px solid rgba(255,255,255,0.2)',
               }}
             >
               RU
@@ -179,179 +111,165 @@ export default function Page() {
             <button
               onClick={() => setLang('en')}
               style={{
-                padding: '6px 10px',
-                borderRadius: 10,
                 background: lang === 'en' ? '#fff' : 'transparent',
                 color: lang === 'en' ? '#000' : '#fff',
-                fontWeight: 600,
-                border: 'none',
+                borderRadius: 8,
+                padding: '4px 8px',
+                border: '1px solid rgba(255,255,255,0.2)',
               }}
             >
               EN
             </button>
           </div>
-
-          <TonConnectButton />
         </div>
+        <TonConnectButton />
       </div>
 
-      {/* content */}
-      <div style={{ flex: 1 }}>
-        <h1 style={{ margin: 0, fontSize: 42, lineHeight: 1.1 }}>{t.title}</h1>
-        <div style={{ opacity: 0.7, marginTop: 8, marginBottom: 22 }}>
-          {t.fast}
+      {/* TITLE */}
+      <h1 style={{ fontSize: 38, lineHeight: 1.2, marginBottom: 8 }}>{t.title}</h1>
+      <div style={{ opacity: 0.8, marginBottom: 28 }}>{t.subtitle}</div>
+
+      {/* FORM */}
+      <div
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          borderRadius: 16,
+          padding: 20,
+          border: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 20 }}>{t.buy}</div>
+
+        <label style={{ display: 'block', marginBottom: 8 }}>{t.username}</label>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value.trim())}
+          placeholder={t.usernamePlaceholder}
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          style={{
+            width: '100%',
+            height: 48,
+            borderRadius: 8,
+            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.05)',
+            color: '#fff',
+            padding: '0 12px',
+            fontSize: 16,
+          }}
+        />
+        <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>{t.usernameHint}</div>
+
+        <div style={{ marginTop: 20 }}>
+          <label style={{ display: 'block', marginBottom: 8 }}>{t.amount}</label>
+          <input
+            type="number"
+            value={stars}
+            onChange={(e) => setStars(e.target.value)}
+            placeholder="100"
+            style={{
+              width: '100%',
+              height: 48,
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(255,255,255,0.05)',
+              color: '#fff',
+              padding: '0 12px',
+              fontSize: 16,
+            }}
+          />
+          <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>
+            {t.ok} — {stars || 0} Stars
+          </div>
         </div>
 
+        {/* ИТОГ */}
         <div
           style={{
-            padding: 20,
-            borderRadius: 16,
-            background: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.08)',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: 16,
+            marginBottom: 8,
+            fontSize: 16,
           }}
         >
-          <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
-            {t.buyBox}
-          </div>
+          <div>{t.toPay}</div>
+          <div>≈ {amountTon.toFixed(4)} TON</div>
+        </div>
 
-          <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-            {t.userLabel}
-          </label>
-          <input
-            value={username}
-            onChange={(e) => {
-              const v = e.target.value.replace(/[^a-zA-Z0-9_]/g, '');
-              setUsername(v);
-            }}
-            inputMode="text"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="username"
-            style={{
-              width: '100%',
-              height: 52,
-              padding: '0 14px',
-              borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.14)',
-              background: 'rgba(255,255,255,0.02)',
-              color: '#e5edf5',
-              outline: 'none',
-            }}
-          />
+        {wallet && (
           <div
             style={{
-              marginTop: 8,
-              marginBottom: 14,
-              fontSize: 13,
-              opacity: 0.7,
-              color:
-                username.length > 0 && !usernameValid ? '#ff6868' : 'inherit',
-            }}
-          >
-            {t.userHint}
-          </div>
-
-          <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-            {t.amountLabel}
-          </label>
-          <input
-            value={amountStr}
-            onChange={(e) => {
-              const next = e.target.value.replace(/[^\d]/g, '');
-              setAmountStr(next);
-            }}
-            onBlur={() => {
-              const v = Math.max(1, amount || 0);
-              setAmountStr(String(v));
-            }}
-            placeholder="100"
-            inputMode="numeric"
-            style={{
-              width: '100%',
-              height: 52,
-              padding: '0 14px',
-              borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.14)',
-              background: 'rgba(255,255,255,0.02)',
-              color: '#e5edf5',
-              outline: 'none',
-            }}
-          />
-          <div style={{ marginTop: 8, marginBottom: 16, opacity: 0.7 }}>
-            {t.ok(amount)}
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr auto',
-              gap: 8,
-              alignItems: 'center',
-              marginTop: 8,
-              marginBottom: 12,
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 20,
               fontSize: 16,
             }}
           >
-            <div>{t.toPay}</div>
-            <div>≈ {formatTon(amountTon)} TON</div>
-
-            <div style={{ opacity: 0.8 }}>{t.balance}</div>
-            <div
-              style={{
-                color: notEnough ? '#ff6868' : 'inherit',
-                opacity: balLoading ? 0.6 : 1,
-              }}
-            >
-              {balLoading || balanceTon === null
-                ? '—'
-                : `${formatTon(balanceTon)} TON`}
-            </div>
+            <div>{t.balance}</div>
+            <div>{balance?.toFixed(4) ?? '—'} TON</div>
           </div>
+        )}
 
-          <button
-            onClick={onBuy}
-            disabled={!canBuy}
-            style={{
-              width: '100%',
-              height: 54,
-              borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.12)',
-              background: canBuy
-                ? 'linear-gradient(90deg, #4da3ff 0%, #2fe3c8 100%)'
-                : 'rgba(255,255,255,0.06)',
-              color: canBuy ? '#001014' : 'rgba(255,255,255,0.5)',
-              fontSize: 18,
-              fontWeight: 700,
-              cursor: canBuy ? 'pointer' : 'not-allowed',
-            }}
-          >
-            {t.buy}
-          </button>
-        </div>
+        <button
+          onClick={onBuy}
+          disabled={!canBuy}
+          style={{
+            width: '100%',
+            height: 54,
+            borderRadius: 12,
+            border: 'none',
+            background: canBuy
+              ? 'linear-gradient(90deg,#00C6FB,#005BEA)'
+              : 'rgba(255,255,255,0.08)',
+            color: canBuy ? '#001014' : 'rgba(255,255,255,0.3)',
+            fontSize: 18,
+            fontWeight: 700,
+            cursor: canBuy ? 'pointer' : 'default',
+          }}
+        >
+          {t.buy}
+        </button>
       </div>
 
-      {/* footer */}
-<div
-  style={{
-    marginTop: 32,
-    padding: '16px 0',
-    borderTop: '1px solid rgba(255,255,255,0.1)',
-    textAlign: 'center',
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-  }}
->
-  <a href="/privacy" style={{ color: 'inherit', textDecoration: 'none', marginRight: 12 }}>
-    Политика
-  </a>
-  |
-  <a href="/terms" style={{ color: 'inherit', textDecoration: 'none', marginLeft: 12, marginRight: 12 }}>
-    Условия
-  </a>
-  |
-  <span style={{ marginLeft: 12 }}>© 2025 TonStars</span>
-</div>
+      {/* FOOTER */}
+      <div
+        style={{
+          marginTop: 32,
+          padding: '16px 0',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          textAlign: 'center',
+          fontSize: 14,
+          color: 'rgba(255,255,255,0.7)',
+        }}
+      >
+        <a
+          href="/privacy"
+          style={{
+            color: 'inherit',
+            textDecoration: 'none',
+            marginRight: 12,
+          }}
+        >
+          {t.policy}
+        </a>
+        |
+        <a
+          href="/terms"
+          style={{
+            color: 'inherit',
+            textDecoration: 'none',
+            marginLeft: 12,
+            marginRight: 12,
+          }}
+        >
+          {t.terms}
+        </a>
+        |
+        <span style={{ marginLeft: 12 }}>© 2025 TonStars</span>
+      </div>
+    </main>
   );
 }
