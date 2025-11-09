@@ -166,16 +166,25 @@ export default function Page() {
 
       {/* HERO */}
       <h1
-        style={{
-          margin: '24px 0 8px',
-          fontSize: 36,
-          lineHeight: 1.1,
-          letterSpacing: 0.2
-        }}
-      >
-        {t.hero}
-      </h1>
-      <div style={{ opacity: 0.75, marginBottom: 18 }}>{t.sub}</div>
+  style={{
+    margin: '24px 0 8px',
+    fontSize: 36,
+    lineHeight: 1.1,
+    letterSpacing: 0.2,
+    textAlign: 'center'
+  }}
+>
+  {t.hero}
+</h1>
+<div
+  style={{
+    opacity: 0.75,
+    marginBottom: 18,
+    textAlign: 'center'
+  }}
+>
+  {t.sub}
+</div>
 
       {/* CARD */}
       <div
