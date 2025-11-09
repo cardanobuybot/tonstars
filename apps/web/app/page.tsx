@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
+import { TonConnectButton, useTonConnectUI, useTonWallet } from '@tonconnect/ui-react';
 
 const STAR_TON_RATE = 0.0002;
 
@@ -64,12 +64,6 @@ export default function Page() {
     };
   }, [address]);
 
-  async function disconnect() {
-    try {
-      await tonConnectUI.disconnect();
-    } catch {}
-  }
-
   async function connect() {
     try {
       await tonConnectUI.openModal();
@@ -101,8 +95,7 @@ export default function Page() {
     toPay: 'К оплате (TON)',
     balance: 'Баланс (TON)',
     buy: 'Купить Stars',
-    connect: 'Подключить кошелёк',
-    logout: 'Выйти',
+    connect: 'Подключить кошелёк'
   };
 
   return (
@@ -128,55 +121,9 @@ export default function Page() {
           <div style={{ fontSize: 20, fontWeight: 700 }}>TonStars</div>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          {wallet ? (
-            <>
-              <div
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 10,
-                  background: 'rgba(255,255,255,0.06)',
-                  fontSize: 14,
-                }}
-              >
-                {address?.slice(0, 4)}…{address?.slice(-4)}{' '}
-                {balanceTon !== null && (
-                  <span style={{ opacity: 0.8 }}>
-                    · {formatTon(balanceTon)} TON
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={disconnect}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 10,
-                  background: 'rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  cursor: 'pointer',
-                }}
-              >
-                {t.logout}
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={connect}
-              style={{
-                padding: '10px 16px',
-                borderRadius: 12,
-                background:
-                  'linear-gradient(90deg, #4da3ff 0%, #2fe3c8 100%)',
-                color: '#001014',
-                fontWeight: 700,
-                border: 'none',
-                cursor: 'pointer',
-              }}
-              data-tc-button
-            >
-              {t.connect}
-            </button>
-          )}
+        {/* оригинальная кнопка TonConnect */}
+        <div>
+          <TonConnectButton />
         </div>
       </div>
 
