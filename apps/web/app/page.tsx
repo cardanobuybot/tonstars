@@ -258,33 +258,88 @@ export default function Page() {
         </button>
       </div>
 
-      {/* ── BOTTOM BAR: язык + футер в одну линию ───────────── */}
-      <div className="bottom-bar">
-        <div data-langpill>
-          <button
-            onClick={() => setLang('ru')}
-            aria-label="RU"
-            className={lang === 'ru' ? 'lang-active' : ''}
-          >
-            RU
-          </button>
-          <button
-            onClick={() => setLang('en')}
-            aria-label="EN"
-            className={lang === 'en' ? 'lang-active' : ''}
-          >
-            EN
-          </button>
-        </div>
+      {/* ── FOOTER + LANG: одна линия ───────────── */}
+<div
+  style={{
+    maxWidth: 840,
+    margin: '28px auto 0',
+    paddingTop: 16,
+    borderTop: '1px solid rgba(255,255,255,0.06)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    flexWrap: 'wrap',
+    opacity: 0.9,
+    fontSize: 15,
+  }}
+>
+  {/* язык */}
+  <div
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 6,
+      background: '#10131a',
+      padding: '2px 6px',
+      borderRadius: 16,
+      border: '1px solid rgba(255,255,255,0.06)',
+    }}
+  >
+    <button
+      onClick={() => setLang('ru')}
+      aria-label="RU"
+      style={{
+        padding: '4px 10px',
+        borderRadius: 14,
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: lang === 'ru' ? '#0098ea' : 'transparent',
+        color: lang === 'ru' ? '#fff' : '#cdd6f4',
+        fontWeight: 700,
+      }}
+    >
+      RU
+    </button>
+    <button
+      onClick={() => setLang('en')}
+      aria-label="EN"
+      style={{
+        padding: '4px 10px',
+        borderRadius: 14,
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: lang === 'en' ? '#0098ea' : 'transparent',
+        color: lang === 'en' ? '#fff' : '#cdd6f4',
+        fontWeight: 700,
+      }}
+    >
+      EN
+    </button>
+  </div>
 
-        <div className="footer-inline">
-          <a href="/privacy">{t.policy}</a>
-          <span aria-hidden="true">|</span>
-          <a href="/terms">{t.terms}</a>
-          <span aria-hidden="true">|</span>
-          <span>{t.yearLine}</span>
-        </div>
-      </div>
+  {/* вертикальный разделитель */}
+  <span style={{ opacity: 0.5 }}>|</span>
+
+  {/* ссылки */}
+  <div
+    style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+    }}
+  >
+    <a href="/privacy" style={{ color: '#9fb4ff', textDecoration: 'none' }}>
+      {t.policy}
+    </a>
+    <span aria-hidden="true">|</span>
+    <a href="/terms" style={{ color: '#9fb4ff', textDecoration: 'none' }}>
+      {t.terms}
+    </a>
+    <span aria-hidden="true">|</span>
+    <span>{t.yearLine}</span>
+  </div>
+</div>
     </div>
   );
 }
