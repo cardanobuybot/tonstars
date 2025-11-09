@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
 
-// Константа курса: 1 Star = 0.0002 TON
 const STAR_TON_RATE = 0.0002;
 
 const texts = {
@@ -46,66 +45,46 @@ const texts = {
 };
 
 export default function Page() {
-  // Язык интерфейса
   const [lang, setLang] = useState<'ru' | 'en'>('ru');
   const t = texts[lang];
-
-  // Поля формы
   const [username, setUsername] = useState('');
   const [amountStr, setAmountStr] = useState('100');
 
-  // Кошелёк TonConnect
   const wallet = useTonWallet();
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
-  // Валидация username (латиница/цифры/_; 5–32)
   const userOk = useMemo(() => /^[a-z0-9_]{5,32}$/i.test(username), [username]);
-
-  // Парсим количество (разрешим пустую строку, а считать будем как 0)
   const amountNum = useMemo(() => {
-    const onlyDigits = amountStr.replace(/[^\d]/g, '');
-    if (onlyDigits === '') return 0;
-    const n = parseInt(onlyDigits, 10);
+    const digits = amountStr.replace(/[^\d]/g, '');
+    const n = parseInt(digits || '0', 10);
     return Number.isFinite(n) ? n : 0;
   }, [amountStr]);
 
   const amtOk = amountNum >= 1;
-
-  // Сумма в TON
   const amountTon = useMemo(() => Number((amountNum * STAR_TON_RATE).toFixed(4)), [amountNum]);
-
   const canBuy = userOk && amtOk && !!wallet;
 
-  // Баланс
   useEffect(() => {
     let aborted = false;
-
     async function fetchBalance(addr: string) {
       try {
         const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(addr)}`;
         const r = await fetch(url);
         const j = await r.json();
         const nano = Number(j.result);
-        if (!aborted && Number.isFinite(nano)) {
-          setBalanceTon(Number((nano / 1e9).toFixed(4)));
-        }
+        if (!aborted && Number.isFinite(nano)) setBalanceTon(Number((nano / 1e9).toFixed(4)));
       } catch {
         if (!aborted) setBalanceTon(null);
       }
     }
-
     if (addressFriendly) {
       setBalanceTon(null);
       fetchBalance(addressFriendly);
-    } else {
-      setBalanceTon(null);
-    }
-
+    } else setBalanceTon(null);
     return () => { aborted = true; };
   }, [addressFriendly]);
 
-  // Покупка (заглушка)
   const onBuy = () => {
     if (!canBuy) return;
     alert(
@@ -122,42 +101,8 @@ export default function Page() {
         <div data-hdr-left>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
           <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>TonStars</div>
-
-          {/* языковая пилюля */}
-          <div data-langpill>
-            <button
-              onClick={() => setLang('ru')}
-              aria-label="RU"
-              style={{
-                padding: '4px 10px',
-                borderRadius: 14,
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: lang === 'ru' ? '#fff' : 'transparent',
-                color: lang === 'ru' ? '#000' : '#cdd6f4',
-                fontWeight: 700
-              }}
-            >
-              RU
-            </button>
-            <button
-              onClick={() => setLang('en')}
-              aria-label="EN"
-              style={{
-                padding: '4px 10px',
-                borderRadius: 14,
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: lang === 'en' ? '#fff' : 'transparent',
-                color: lang === 'en' ? '#000' : '#cdd6f4',
-                fontWeight: 700
-              }}
-            >
-              EN
-            </button>
-          </div>
         </div>
-
         <div data-hdr-right>
-          {/* wrapper чтобы у кнопки был data-атрибут для css-скейла */}
           <div data-tc-button>
             <TonConnectButton />
           </div>
@@ -166,25 +111,17 @@ export default function Page() {
 
       {/* HERO */}
       <h1
-  style={{
-    margin: '24px 0 8px',
-    fontSize: 36,
-    lineHeight: 1.1,
-    letterSpacing: 0.2,
-    textAlign: 'center'
-  }}
->
-  {t.hero}
-</h1>
-<div
-  style={{
-    opacity: 0.75,
-    marginBottom: 18,
-    textAlign: 'center'
-  }}
->
-  {t.sub}
-</div>
+        style={{
+          margin: '32px 0 8px',
+          fontSize: 36,
+          lineHeight: 1.1,
+          letterSpacing: 0.2,
+          textAlign: 'center'
+        }}
+      >
+        {t.hero}
+      </h1>
+      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>{t.sub}</div>
 
       {/* CARD */}
       <div
@@ -199,14 +136,10 @@ export default function Page() {
           margin: '0 auto'
         }}
       >
-        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
-          {t.buyCardTitle}
-        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>{t.buyCardTitle}</div>
 
         {/* username */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-          {t.usernameLabel}
-        </label>
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.usernameLabel}</label>
         <input
           inputMode="text"
           autoCapitalize="off"
@@ -227,18 +160,14 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div
-          className={username ? (userOk ? 'ok' : 'err') : undefined}
-          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-        >
+        <div className={username ? (userOk ? 'ok' : 'err') : undefined}
+          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}>
           {username ? (userOk ? t.ok(Math.max(amountNum, 0)) : t.usernameErr) : t.usernameHint}
         </div>
 
         {/* amount */}
         <div style={{ height: 14 }} />
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-          {t.amountLabel}
-        </label>
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.amountLabel}</label>
         <input
           inputMode="numeric"
           pattern="[0-9]*"
@@ -256,38 +185,18 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        <div
-          className={amountStr !== '' ? (amtOk ? 'ok' : 'err') : undefined}
-          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-        >
+        <div className={amountStr !== '' ? (amtOk ? 'ok' : 'err') : undefined}
+          style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}>
           {amountStr !== '' ? (amtOk ? t.ok(Math.max(amountNum, 0)) : t.amountErr) : t.ok(0)}
         </div>
 
-        {/* итоги */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginTop: 10,
-            marginBottom: 12,
-            fontSize: 16,
-            opacity: 0.95
-          }}
-        >
+        {/* итог */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, marginBottom: 12, fontSize: 16, opacity: 0.95 }}>
           <div>{t.toPay}</div>
           <div>≈ {amountTon.toFixed(4)} TON</div>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginTop: 4,
-            marginBottom: 16,
-            fontSize: 16,
-            opacity: 0.85
-          }}
-        >
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, marginBottom: 16, fontSize: 16, opacity: 0.85 }}>
           <div>{t.balance}</div>
           <div>{balanceTon == null ? (wallet ? '— TON' : '— TON') : `${balanceTon.toFixed(4)} TON`}</div>
         </div>
@@ -310,6 +219,38 @@ export default function Page() {
           }}
         >
           {t.buy}
+        </button>
+      </div>
+
+      {/* LANG SWITCHER */}
+      <div data-langpill>
+        <button
+          onClick={() => setLang('ru')}
+          aria-label="RU"
+          style={{
+            padding: '4px 10px',
+            borderRadius: 14,
+            border: '1px solid rgba(255,255,255,0.08)',
+            background: lang === 'ru' ? '#fff' : 'transparent',
+            color: lang === 'ru' ? '#000' : '#cdd6f4',
+            fontWeight: 700
+          }}
+        >
+          RU
+        </button>
+        <button
+          onClick={() => setLang('en')}
+          aria-label="EN"
+          style={{
+            padding: '4px 10px',
+            borderRadius: 14,
+            border: '1px solid rgba(255,255,255,0.08)',
+            background: lang === 'en' ? '#fff' : 'transparent',
+            color: lang === 'en' ? '#000' : '#cdd6f4',
+            fontWeight: 700
+          }}
+        >
+          EN
         </button>
       </div>
 
