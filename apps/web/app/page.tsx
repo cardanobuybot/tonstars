@@ -70,16 +70,14 @@ export default function Page() {
 
   const [tonConnectUI] = useTonConnectUI();
   const wallet = useTonWallet();
-  const isConnected = !!wallet?.account?.address; // ← ключевая проверка
+  const isConnected = !!wallet?.account?.address;
 
-  // username 5..32, латиница/цифры/_
   const usernameValid = useMemo(() => {
     const u = username.trim();
     if (u.length < 5 || u.length > 32) return false;
     return /^[a-zA-Z0-9_]+$/.test(u);
   }, [username]);
 
-  // целое ≥ 1, без ведущих нулей
   const amount = useMemo(() => {
     const cleaned = rawAmount.replace(/[^0-9]/g, '');
     if (cleaned === '' || /^0\d+/.test(cleaned)) return NaN;
@@ -94,7 +92,6 @@ export default function Page() {
   );
 
   const onSubmit = () => {
-    // если не подключен — открываем модал и выходим
     if (!isConnected) {
       tonConnectUI.openModal();
       return;
@@ -110,18 +107,15 @@ export default function Page() {
     );
     if (!ok) return;
 
-    // TODO: тут реальный flow (backend + tonConnectUI.sendTransaction)
     alert('Демо: покупка будет реализована после backend.');
   };
 
-  // короткий адрес в хедере
   const shortAddr = wallet?.account?.address
     ? `${wallet.account.address.slice(0, 4)}…${wallet.account.address.slice(-4)}`
     : '';
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#e5edf5' }}>
-      {/* Header */}
       <header
         style={{
           display: 'flex',
@@ -168,7 +162,6 @@ export default function Page() {
         </div>
       </header>
 
-      {/* Hero */}
       <section style={{ padding: '12px 20px 0' }}>
         <h1 style={{ fontSize: 34, lineHeight: 1.15, margin: 0, fontWeight: 800 }}>
           {tr.title1} <br /> {tr.title2}
@@ -176,7 +169,6 @@ export default function Page() {
         <p style={{ opacity: 0.7, marginTop: 10 }}>{tr.tagline}</p>
       </section>
 
-      {/* Card */}
       <main style={{ padding: 20 }}>
         <div
           style={{
@@ -191,10 +183,9 @@ export default function Page() {
         >
           <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 10 }}>{tr.cardTitle}</div>
 
-          {/* username */}
           <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{tr.usernameLabel}</label>
           <input
-            inputMode="latin"
+            inputMode="text"         // ← было "latin"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
@@ -223,7 +214,6 @@ export default function Page() {
             {username.length === 0 ? ' ' : usernameValid ? tr.usernameHintOk(username.trim()) : tr.usernameHintBad}
           </div>
 
-          {/* amount */}
           <div style={{ height: 12 }} />
           <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{tr.amountLabel}</label>
           <input
@@ -257,14 +247,12 @@ export default function Page() {
             {rawAmount.length === 0 ? ' ' : Number.isFinite(amount) ? tr.amountHintOk(Number(amount)) : tr.amountHintBad}
           </div>
 
-          {/* total */}
           <div style={{ height: 16 }} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 700 }}>
             <span>{tr.payLabel}</span>
             <span>≈ {tonToPay.toFixed(4)} TON</span>
           </div>
 
-          {/* CTA */}
           <div style={{ height: 14 }} />
           <button
             onClick={onSubmit}
@@ -284,7 +272,6 @@ export default function Page() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer
         style={{
           maxWidth: 720,
