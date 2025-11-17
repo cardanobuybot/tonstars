@@ -1,8 +1,13 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
+import {
+  TonConnectButton,
+  useTonConnectUI,
+  useTonWallet
+} from '@tonconnect/ui-react';
 
+// временный курс (как и раньше)
 const STAR_TON_RATE = 0.0002;
 
 const texts = {
@@ -14,7 +19,6 @@ const texts = {
     usernamePh: 'username без @',
     usernameHint: 'Введите ник без @.',
     amountLabel: 'Количество Stars:',
-    ok: (n: number) => `OK — ${n} Stars`,
     usernameErr: 'Ник: латиница/цифры/_ (5–32)',
     amountErr: 'Введите целое число ≥ 1',
     toPay: 'К оплате (TON)',
@@ -23,9 +27,14 @@ const texts = {
     policy: 'Политика',
     terms: 'Условия',
     yearLine: '© 2025 TonStars',
-    needWallet: 'Подключите TON-кошелёк',
-    orderError: 'Ошибка при создании заказа',
-    txSent: 'Транзакция отправлена, ждём подтверждения…'
+    status: {
+      idle: '',
+      creating: 'Создаём заказ…',
+      opening_wallet: 'Открываем кошелёк…',
+      waiting_confirm: 'Транзакция отправлена, ждём подтверждения…',
+      paid: 'Оплата получена, скоро звёзды будут начислены.',
+      error: 'Ошибка при создании заказа.'
+    }
   },
   en: {
     hero: 'Buy Telegram Stars with TON',
@@ -35,7 +44,6 @@ const texts = {
     usernamePh: 'username without @',
     usernameHint: 'Enter nickname without @.',
     amountLabel: 'Stars amount:',
-    ok: (n: number) => `OK — ${n} Stars`,
     usernameErr: 'Username: latin/digits/_ (5–32)',
     amountErr: 'Enter an integer ≥ 1',
     toPay: 'To pay (TON)',
@@ -44,36 +52,47 @@ const texts = {
     policy: 'Privacy',
     terms: 'Terms',
     yearLine: '© 2025 TonStars',
-    needWallet: 'Connect TON wallet',
-    orderError: 'Error while creating order',
-    txSent: 'Transaction sent, waiting for confirmation…'
+    status: {
+      idle: '',
+      creating: 'Creating order…',
+      opening_wallet: 'Opening wallet…',
+      waiting_confirm: 'Transaction sent, waiting for confirmation…',
+      paid: 'Payment received, stars will be delivered soon.',
+      error: 'Error while creating order.'
+    }
   }
 };
 
-export default function Page() {
-  const [lang, setLang] = useState<'ru' | 'en'>('ru');
-  const t = texts[lang];
+type Lang = 'ru' | 'en';
+type StatusCode =
+  | 'idle'
+  | 'creating'
+  | 'opening_wallet'
+  | 'waiting_confirm'
+  | 'paid'
+  | 'error';
 
-  // TonConnect
-  const wallet = useTonWallet();
-  const [tonConnectUI] = useTonConnectUI();
-  const addressFriendly = wallet?.account?.address;
+export default function Page() {
+  const [lang, setLang] = useState<Lang>('ru');
+  const t = texts[lang];
 
   // форма
   const [username, setUsername] = useState('');
   const [amountStr, setAmountStr] = useState('1');
 
-  // баланс
-  const [balanceTon, setBalanceTon] = useState<number | null>(null);
+  // статус процесса
+  const [status, setStatus] = useState<StatusCode>('idle');
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
-  // ui-состояния
-  const [loading, setLoading] = useState(false);
-  const [errorText, setErrorText] = useState<string | null>(null);
-  const [infoText, setInfoText] = useState<string | null>(null);
+  // кошелёк и TonConnect
+  const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
+  const [balanceTon, setBalanceTon] = useState<number | null>(null);
+  const addressFriendly = wallet?.account?.address;
 
   // валидации
   const userOk = useMemo(
-    () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '')),
+    () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '').trim()),
     [username]
   );
 
@@ -89,9 +108,9 @@ export default function Page() {
     [amountNum]
   );
 
-  const canBuy = userOk && amtOk && !!wallet && !loading;
+  const canBuy = userOk && amtOk && !!wallet;
 
-  // баланс
+  // подтягиваем баланс адреса
   useEffect(() => {
     let aborted = false;
 
@@ -123,68 +142,96 @@ export default function Page() {
     };
   }, [addressFriendly]);
 
-  // клик "Купить"
+  // основной flow покупки
   const onBuy = async () => {
-    setErrorText(null);
-    setInfoText(null);
-
+    if (!canBuy) return;
     if (!wallet) {
-      setErrorText(t.needWallet);
-      return;
-    }
-    if (!userOk || !amtOk) {
-      // на всякий пожарный, хотя кнопка и так дизейблится
+      setStatus('error');
+      setErrorDetails('NO_WALLET');
       return;
     }
 
     try {
-      setLoading(true);
+      setStatus('creating');
+      setErrorDetails(null);
 
       // 1) создаём ордер на бэке
-      const res = await fetch('/api/order/create', {
+      const createRes = await fetch('/api/order/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
           stars: amountNum
         })
       });
 
-      const data = await res.json().catch(() => null as any);
+      const createData = await createRes.json();
 
-      if (!res.ok || !data?.ok) {
-        // ВАЖНО: показываем код ошибки с бэка
-        const code = data?.error || `HTTP_${res.status}`;
-        console.log('order/create error:', code, data);
-        setErrorText(`${t.orderError}: ${code}`);
-        return;
+      if (!createRes.ok || !createData.ok) {
+        throw new Error(createData?.error || 'ORDER_CREATE_FAILED');
       }
 
-      // 2) формируем транзакцию для TonConnect
-      const nanoAmount = BigInt(Math.round(data.ton_amount * 1e9));
+      const orderId: number = createData.order_id;
+      const toAddress: string = createData.to_address;
+      const tonAmount: number = createData.ton_amount;
 
-      await tonConnectUI.sendTransaction({
+      setStatus('opening_wallet');
+
+      // 2) отправляем транзакцию через TonConnect
+      const nanoAmount = Math.round(tonAmount * 1e9);
+      const tx = {
         validUntil: Math.floor(Date.now() / 1000) + 300,
         messages: [
           {
-            address: data.to_address,
-            amount: nanoAmount.toString(),
-            payload: undefined,
-            stateInit: undefined
+            address: toAddress,
+            amount: nanoAmount.toString()
+            // payload можно будет добавить позже, если решим возвращать комментарий
           }
         ]
+      };
+
+      const txResult: any = await tonConnectUI.sendTransaction(tx);
+
+      // если дошли сюда — кошелёк не отменил отправку
+      setStatus('waiting_confirm');
+
+      const tonTxBoc = txResult?.boc || null;
+      const fromAddr = wallet.account.address;
+
+      // 3) дергаем callback, чтобы пометить ордер как paid
+      const cbRes = await fetch('/api/pay-callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: orderId,
+          ton_tx_hash: tonTxBoc,
+          ton_wallet_addr: fromAddr
+        })
       });
 
-      setInfoText(t.txSent);
+      const cbData = await cbRes.json();
+
+      if (!cbRes.ok || !cbData.ok) {
+        throw new Error(cbData?.error || 'CALLBACK_FAILED');
+      }
+
+      if (cbData.status === 'paid' || cbData.status === 'delivered') {
+        setStatus('paid');
+      } else {
+        // на всякий случай — если статус какой-то другой
+        setStatus('waiting_confirm');
+      }
     } catch (err: any) {
-      console.error('onBuy error', err);
-      setErrorText(`${t.orderError}: ${String(err?.message || err)}`);
-    } finally {
-      setLoading(false);
+      console.error('Buy flow error:', err);
+      setStatus('error');
+      setErrorDetails(err?.message || String(err));
     }
   };
+
+  const statusText = t.status[status];
+  const showStatus = !!statusText;
+  const isError = status === 'error';
+  const isSuccess = status === 'paid';
 
   return (
     <div className="container safe-bottom" style={{ padding: '32px 16px 28px' }}>
@@ -192,7 +239,9 @@ export default function Page() {
       <div data-hdr style={{ marginBottom: 12 }}>
         <div data-hdr-left>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>TonStars</div>
+          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
+            TonStars
+          </div>
         </div>
         <div data-hdr-right>
           <div data-tc-button>
@@ -214,7 +263,9 @@ export default function Page() {
       >
         {t.hero}
       </h1>
-      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>{t.sub}</div>
+      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>
+        {t.sub}
+      </div>
 
       {/* CARD */}
       <div
@@ -228,10 +279,16 @@ export default function Page() {
           margin: '0 auto'
         }}
       >
-        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>{t.buyCardTitle}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
+          {t.buyCardTitle}
+        </div>
 
         {/* username */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.usernameLabel}</label>
+        <label
+          style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
+        >
+          {t.usernameLabel}
+        </label>
         <input
           inputMode="text"
           autoCapitalize="off"
@@ -240,7 +297,9 @@ export default function Page() {
           placeholder={t.usernamePh}
           value={username}
           onChange={(e) => setUsername(e.target.value.trim())}
-          className={username ? (userOk ? 'input-ok' : 'input-err') : undefined}
+          className={
+            username ? (userOk ? 'input-ok' : 'input-err') : undefined
+          }
           style={{
             width: '100%',
             height: 52,
@@ -263,13 +322,19 @@ export default function Page() {
 
         {/* amount */}
         <div style={{ height: 14 }} />
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.amountLabel}</label>
+        <label
+          style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
+        >
+          {t.amountLabel}
+        </label>
         <input
           inputMode="numeric"
           pattern="[0-9]*"
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
-          className={amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined}
+          className={
+            amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined
+          }
           style={{
             width: '100%',
             height: 52,
@@ -281,6 +346,14 @@ export default function Page() {
             outline: 'none'
           }}
         />
+        {amountStr !== '' && !amtOk && (
+          <div
+            className="err"
+            style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
+          >
+            {t.amountErr}
+          </div>
+        )}
 
         {/* итоги */}
         <div
@@ -311,29 +384,49 @@ export default function Page() {
           <div>{balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}</div>
         </div>
 
-        {/* ошибки / инфо */}
-        {errorText && (
-          <div style={{ color: '#ff6b6b', marginBottom: 8, fontSize: 14 }}>{errorText}</div>
-        )}
-        {infoText && (
-          <div style={{ color: '#4cd964', marginBottom: 8, fontSize: 14 }}>{infoText}</div>
+        {/* статус процесса */}
+        {showStatus && (
+          <div
+            style={{
+              fontSize: 14,
+              marginBottom: 10,
+              color: isError
+                ? '#ff6b6b'
+                : isSuccess
+                ? '#4cd964'
+                : 'rgba(255,255,255,0.8)'
+            }}
+          >
+            {statusText}
+            {isError && errorDetails
+              ? ` (${errorDetails})`
+              : null}
+          </div>
         )}
 
+        {/* кнопка */}
         <button
           onClick={onBuy}
-          disabled={!canBuy}
+          disabled={!canBuy || status === 'creating' || status === 'opening_wallet'}
           style={{
             width: '100%',
             height: 54,
             borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.08)',
-            background: canBuy
-              ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
-              : 'rgba(255,255,255,0.06)',
-            color: canBuy ? '#001014' : 'rgba(230,235,255,0.5)',
+            background:
+              canBuy && status !== 'creating' && status !== 'opening_wallet'
+                ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
+                : 'rgba(255,255,255,0.06)',
+            color:
+              canBuy && status !== 'creating' && status !== 'opening_wallet'
+                ? '#001014'
+                : 'rgba(230,235,255,0.5)',
             fontSize: 18,
             fontWeight: 800,
-            cursor: canBuy ? 'pointer' : 'default'
+            cursor:
+              canBuy && status !== 'creating' && status !== 'opening_wallet'
+                ? 'pointer'
+                : 'default'
           }}
         >
           {t.buy}
