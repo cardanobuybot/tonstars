@@ -1,14 +1,17 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
+import { beginCell } from '@ton/core';
+import {
+  TonConnectButton,
+  useTonWallet,
+  useTonConnectUI
+} from '@tonconnect/ui-react';
 
-// тип ответа /api/prices
-type PricesResponse = {
-  ok: boolean;
-  markup_percent: number;
-  tiers: { stars: number; base_ton: number; sell_ton: number }[];
-};
+const STAR_TON_RATE = 0.0002;
+
+// адрес твоего сервисного кошелька (куда прилетает TON)
+const SERVICE_WALLET = 'UQDTzy_OvK6MewBe0sExiSJqo5vh1hCT_5xq266EHPlcSrTW';
 
 const texts = {
   ru: {
@@ -49,10 +52,26 @@ const texts = {
   }
 };
 
+// helper для base64 из Uint8Array (и в браузере, и в Node)
+function toBase64(bytes: Uint8Array): string {
+  if (typeof Buffer !== 'undefined') {
+    // в Node / полифилленом окружении
+    return Buffer.from(bytes).toString('base64');
+  }
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
 export default function Page() {
   // язык
   const [lang, setLang] = useState<'ru' | 'en'>('ru');
   const t = texts[lang];
+
+  // TonConnect UI
+  const [tonConnectUI] = useTonConnectUI();
 
   // форма
   const [username, setUsername] = useState('');
@@ -62,33 +81,6 @@ export default function Page() {
   const wallet = useTonWallet();
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
-
-  // динамическая цена с бэка
-  const [pricePerStar, setPricePerStar] = useState<number | null>(null);
-  const [priceError, setPriceError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadPrice() {
-      try {
-        const res = await fetch('/api/prices');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-
-        const data: PricesResponse = await res.json();
-
-        // берём пакет 50 звёзд как базовый (если нет — первый пакет)
-        const tier = data.tiers.find((t) => t.stars === 50) ?? data.tiers[0];
-        const p = tier.sell_ton / tier.stars;
-
-        setPricePerStar(p);
-        setPriceError(null);
-      } catch (err) {
-        console.error(err);
-        setPriceError('Ошибка загрузки цены');
-      }
-    }
-
-    loadPrice();
-  }, []);
 
   // валидации
   const userOk = useMemo(() => /^[a-z0-9_]{5,32}$/i.test(username), [username]);
@@ -100,18 +92,16 @@ export default function Page() {
   }, [amountStr]);
 
   const amtOk = amountNum >= 1;
+  const amountTon = useMemo(
+    () => Number((amountNum * STAR_TON_RATE).toFixed(4)),
+    [amountNum]
+  );
 
-  const amountTon = useMemo(() => {
-    if (!pricePerStar) return 0;
-    return Number((amountNum * pricePerStar).toFixed(4));
-  }, [amountNum, pricePerStar]);
-
-  const canBuy = userOk && amtOk && !!wallet && !!pricePerStar && !priceError;
+  const canBuy = userOk && amtOk && !!wallet;
 
   // баланс
   useEffect(() => {
     let aborted = false;
-
     async function fetchBalance(addr: string) {
       try {
         const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(
@@ -127,28 +117,76 @@ export default function Page() {
         if (!aborted) setBalanceTon(null);
       }
     }
-
     if (addressFriendly) {
       setBalanceTon(null);
       fetchBalance(addressFriendly);
     } else {
       setBalanceTon(null);
     }
-
     return () => {
       aborted = true;
     };
   }, [addressFriendly]);
 
-  // buy flow (заглушка)
-  const onBuy = () => {
-    if (!canBuy || !pricePerStar) return;
+  // TonConnect транзакция
+  const onBuy = async () => {
+    if (!canBuy) return;
 
-    alert(
-      lang === 'ru'
-        ? `Отправим ${amountNum} Stars пользователю @${username} за ~${amountTon} TON.\n(Тут вызываем TonConnect TX)`
-        : `Will send ${amountNum} Stars to @${username} for ~${amountTon} TON.\n(Here call TonConnect TX)`
-    );
+    try {
+      // простой orderId на фронте (потом заменим на id из backend)
+      const orderId = `F${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+
+      const comment =
+        `order:${orderId};user:@${username};stars:${amountNum}`;
+
+      const body = beginCell()
+        .storeUint(0, 32) // текстовый комментарий
+        .storeStringTail(comment)
+        .endCell();
+
+      const payloadBase64 = toBase64(body.toBoc());
+      const amountNano = BigInt(
+        Math.round(amountTon * 1e9) // TON → nanoTON
+      );
+
+      await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 600, // 10 минут
+        messages: [
+          {
+            address: SERVICE_WALLET,
+            amount: amountNano.toString(),
+            payload: payloadBase64
+          }
+        ]
+      });
+
+      if (lang === 'ru') {
+        alert(
+          `Заявка создана.\n` +
+            `Отправлено ~${amountTon} TON за ${amountNum} Stars пользователю @${username}.\n\n` +
+            `orderId: ${orderId}\n` +
+            `После подключения backend мы будем автоматически выдавать звёзды по этому идентификатору.`
+        );
+      } else {
+        alert(
+          `Request created.\n` +
+            `Sent ~${amountTon} TON for ${amountNum} Stars to @${username}.\n\n` +
+            `orderId: ${orderId}\n` +
+            `Later backend will auto-deliver Stars using this id.`
+        );
+      }
+    } catch (e: any) {
+      if (e && e.code === 'USER_REJECTS_ERROR') {
+        // просто тихо выходим если пользователь отменил
+        return;
+      }
+      console.error(e);
+      alert(
+        lang === 'ru'
+          ? 'Не удалось отправить транзакцию через TonConnect. Попробуйте ещё раз.'
+          : 'Failed to send transaction via TonConnect. Please try again.'
+      );
+    }
   };
 
   return (
@@ -157,7 +195,9 @@ export default function Page() {
       <div data-hdr style={{ marginBottom: 12 }}>
         <div data-hdr-left>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>TonStars</div>
+          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
+            TonStars
+          </div>
         </div>
         <div data-hdr-right>
           <div data-tc-button>
@@ -179,7 +219,15 @@ export default function Page() {
       >
         {t.hero}
       </h1>
-      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>{t.sub}</div>
+      <div
+        style={{
+          opacity: 0.75,
+          marginBottom: 18,
+          textAlign: 'center'
+        }}
+      >
+        {t.sub}
+      </div>
 
       {/* ── CARD ─────────────────────────────────────────────── */}
       <div
@@ -193,10 +241,26 @@ export default function Page() {
           margin: '0 auto'
         }}
       >
-        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>{t.buyCardTitle}</div>
+        <div
+          style={{
+            fontSize: 22,
+            fontWeight: 800,
+            marginBottom: 14
+          }}
+        >
+          {t.buyCardTitle}
+        </div>
 
         {/* username */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.usernameLabel}</label>
+        <label
+          style={{
+            display: 'block',
+            marginBottom: 8,
+            opacity: 0.9
+          }}
+        >
+          {t.usernameLabel}
+        </label>
         <input
           inputMode="text"
           autoCapitalize="off"
@@ -217,7 +281,7 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        {/* helper under username: only hint or error */}
+        {/* helper под username: либо подсказка, либо ошибка */}
         {(!username || !userOk) && (
           <div
             className={username && !userOk ? 'err' : undefined}
@@ -229,13 +293,23 @@ export default function Page() {
 
         {/* amount */}
         <div style={{ height: 14 }} />
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.amountLabel}</label>
+        <label
+          style={{
+            display: 'block',
+            marginBottom: 8,
+            opacity: 0.9
+          }}
+        >
+          {t.amountLabel}
+        </label>
         <input
           inputMode="numeric"
           pattern="[0-9]*"
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
-          className={amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined}
+          className={
+            amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined
+          }
           style={{
             width: '100%',
             height: 52,
@@ -248,7 +322,7 @@ export default function Page() {
           }}
         />
 
-        {/* итоги */}
+        {/* итог */}
         <div
           style={{
             display: 'flex',
@@ -260,13 +334,7 @@ export default function Page() {
           }}
         >
           <div>{t.toPay}</div>
-          <div>
-            {pricePerStar
-              ? `≈ ${amountTon.toFixed(4)} TON`
-              : priceError
-              ? priceError
-              : '… загружаем цену'}
-          </div>
+          <div>≈ {amountTon.toFixed(4)} TON</div>
         </div>
 
         <div
@@ -280,36 +348,35 @@ export default function Page() {
           }}
         >
           <div>{t.balance}</div>
-          <div>{balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}</div>
+          <div>
+            {balanceTon == null
+              ? '— TON'
+              : `${balanceTon.toFixed(4)} TON`}
+          </div>
         </div>
 
         <button
           onClick={onBuy}
-          disabled={!canBuy || !pricePerStar || !!priceError}
+          disabled={!canBuy}
           style={{
             width: '100%',
             height: 54,
             borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.08)',
-            background:
-              canBuy && pricePerStar && !priceError
-                ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
-                : 'rgba(255,255,255,0.06)',
-            color:
-              canBuy && pricePerStar && !priceError
-                ? '#001014'
-                : 'rgba(230,235,255,0.5)',
+            background: canBuy
+              ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
+              : 'rgba(255,255,255,0.06)',
+            color: canBuy ? '#001014' : 'rgba(230,235,255,0.5)',
             fontSize: 18,
             fontWeight: 800,
-            cursor:
-              canBuy && pricePerStar && !priceError ? 'pointer' : 'default'
+            cursor: canBuy ? 'pointer' : 'default'
           }}
         >
           {t.buy}
         </button>
       </div>
 
-      {/* ── BOTTOM BAR: язык + ссылки ───────── */}
+      {/* ── BOTTOM BAR: язык + ссылки в одну линию по центру ───────── */}
       <div
         className="bottom-bar"
         style={{
@@ -326,7 +393,6 @@ export default function Page() {
           fontSize: 15
         }}
       >
-        {/* переключатель языка */}
         <div
           className="lang-pill"
           style={{
