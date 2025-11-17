@@ -1,166 +1,181 @@
+// apps/web/app/api/pay-callback/route.ts
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
+// подключение к базе
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
-// сервисный кошелёк (куда платят)
-const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET;
-// ключ tonapi
+// наш сервисный кошелёк, сразу в нижнем регистре
+const SERVICE_WALLET = (process.env.TON_PAYMENT_WALLET ?? "").toLowerCase();
+
+// TonAPI key (тонконсоль)
 const TONAPI_KEY = process.env.TONAPI_KEY;
 
-if (!SERVICE_WALLET) {
-  console.error("TON_PAYMENT_WALLET not set");
-}
-if (!TONAPI_KEY) {
-  console.error("TONAPI_KEY not set");
-}
+// тело запроса от фронта
+type PayCallbackBody = {
+  order_id?: string;
+  tx_hash?: string;
+};
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    // проверяем, что env’ы вообще заданы
+    if (!SERVICE_WALLET) {
+      console.error("TON_PAYMENT_WALLET is not set");
+      return NextResponse.json(
+        { ok: false, error: "SERVICE_WALLET_NOT_SET" },
+        { status: 500 }
+      );
+    }
 
-    const orderId = body.order_id;
-    const txHash = body.tx_hash;
+    if (!TONAPI_KEY) {
+      console.error("TONAPI_KEY is not set");
+      return NextResponse.json(
+        { ok: false, error: "TONAPI_KEY_NOT_SET" },
+        { status: 500 }
+      );
+    }
+
+    const body = (await req.json()) as PayCallbackBody;
+    const orderId = String(body.order_id || "").trim();
+    const txHash = String(body.tx_hash || "").trim();
 
     if (!orderId || !txHash) {
       return NextResponse.json(
-        { ok: false, error: "BAD_BODY" },
+        { ok: false, error: "BAD_PARAMS" },
         { status: 400 }
       );
     }
 
-    // ------------------------
-    // 1. Получаем заказ из базы
-    // ------------------------
-    const client = await pool.connect();
-    let order;
+    // 1) достаём ордер из базы
+    const client1 = await pool.connect();
+    let order: any;
+
     try {
-      const q = await client.query(
-        `SELECT * FROM star_orders WHERE id = $1`,
+      const res = await client1.query(
+        "SELECT * FROM star_orders WHERE id = $1",
         [orderId]
       );
-      if (q.rowCount === 0) {
+
+      if (res.rowCount === 0) {
         return NextResponse.json(
           { ok: false, error: "ORDER_NOT_FOUND" },
           { status: 404 }
         );
       }
-      order = q.rows[0];
+
+      order = res.rows[0];
+
+      if (order.status !== "pending") {
+        return NextResponse.json(
+          { ok: false, error: "ORDER_NOT_PENDING" },
+          { status: 400 }
+        );
+      }
     } finally {
-      client.release();
+      client1.release();
     }
 
-    if (order.status !== "pending") {
-      return NextResponse.json(
-        { ok: false, error: "ALREADY_PROCESSED" },
-        { status: 400 }
-      );
-    }
+    // ожидаемая сумма (в нанотонах)
+    const expectedNano = BigInt(Math.round(Number(order.ton_amount) * 1e9));
 
-    // ------------------------
-    // 2. Проверяем транзакцию в tonapi
-    // ------------------------
-    const url = `https://tonapi.io/v2/blockchain/transactions/${txHash}`;
-    const r = await fetch(url, {
+    // 2) проверяем транзакцию через TonAPI
+    const txUrl = `https://tonapi.io/v2/blockchain/transactions/${txHash}`;
+    const txRes = await fetch(txUrl, {
       headers: {
         Authorization: `Bearer ${TONAPI_KEY}`,
+        Accept: "application/json",
       },
     });
 
-    if (!r.ok) {
+    if (!txRes.ok) {
+      const txt = await txRes.text();
+      console.error("TonAPI error:", txt);
       return NextResponse.json(
-        { ok: false, error: "TONAPI_FAIL" },
-        { status: 500 }
+        { ok: false, error: "TONAPI_ERROR" },
+        { status: 502 }
       );
     }
 
-    const tx = await r.json();
+    const txData: any = await txRes.json();
 
-    // ------------------------
-    // 3. Проверяем получателя
-    // ------------------------
+    // в разных схемах TonAPI немного отличаются поля — соберём все сообщения
+    const msgs: any[] = [
+      ...(txData?.in_msg ? [txData.in_msg] : []),
+      ...(Array.isArray(txData?.out_msgs) ? txData.out_msgs : []),
+    ];
 
     let okRecipient = false;
-    for (const msg of tx.messages || []) {
-      if (
-        msg.recipient?.address?.toLowerCase() ===
-        SERVICE_WALLET.toLowerCase()
-      ) {
+    let okAmount = false;
+    let okComment = false;
+
+    for (const m of msgs) {
+      const rawAddr =
+        m?.destination ||
+        m?.recipient?.address ||
+        m?.recipient ||
+        m?.to_address;
+
+      const addr = typeof rawAddr === "string" ? rawAddr.toLowerCase() : "";
+
+      if (addr === SERVICE_WALLET) {
         okRecipient = true;
-        break;
+
+        // сумма
+        const valueNano = BigInt(
+          m?.value ?? m?.amount ?? m?.value_ ?? m?.msg_data?.amount ?? 0
+        );
+        if (valueNano >= expectedNano) {
+          okAmount = true;
+        }
+
+        // комментарий / payload text
+        const cmt: string =
+          m?.message ||
+          m?.comment ||
+          m?.msg_data?.text ||
+          m?.msg_data?.decoded?.text ||
+          "";
+
+        if (
+          typeof cmt === "string" &&
+          cmt.startsWith(`order:${orderId};`)
+        ) {
+          okComment = true;
+        }
       }
     }
 
-    if (!okRecipient) {
+    if (!okRecipient || !okAmount || !okComment) {
       return NextResponse.json(
-        { ok: false, error: "BAD_RECIPIENT" },
+        { ok: false, error: "TX_NOT_MATCH_ORDER" },
         { status: 400 }
       );
     }
 
-    // ------------------------
-    // 4. Проверяем сумму
-    // ------------------------
-    let received = 0;
-
-    for (const msg of tx.messages || []) {
-      if (
-        msg.recipient?.address?.toLowerCase() ===
-        SERVICE_WALLET.toLowerCase()
-      ) {
-        received += Number(msg.amount || 0);
-      }
-    }
-
-    const receivedTon = received / 1e9;
-
-    if (Math.abs(receivedTon - Number(order.ton_amount)) > 0.0001) {
-      return NextResponse.json(
-        { ok: false, error: "BAD_AMOUNT" },
-        { status: 400 }
-      );
-    }
-
-    // ------------------------
-    // 5. Проверяем комментарий
-    // ------------------------
-
-    const commentText = tx.comment || "";
-
-    if (!commentText.includes(`order:${orderId}`)) {
-      return NextResponse.json(
-        { ok: false, error: "BAD_COMMENT" },
-        { status: 400 }
-      );
-    }
-
-    // ------------------------
-    // 6. Все ок → обновляем заказ
-    // ------------------------
-
+    // 3) помечаем ордер как "paid" и сохраняем хэш транзакции
     const client2 = await pool.connect();
     try {
       await client2.query(
         `
         UPDATE star_orders
         SET status = 'paid',
-            ton_wallet_addr = $1,
             ton_tx_hash = $2,
-            updated_at = NOW()
-        WHERE id = $3
-      `,
-        [SERVICE_WALLET, txHash, orderId]
+            updated_at = now()
+        WHERE id = $1
+        `,
+        [orderId, txHash]
       );
     } finally {
       client2.release();
     }
 
-    return NextResponse.json({ ok: true, status: "paid" });
+    return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("/pay-callback error", err);
+    console.error("pay-callback error:", err);
     return NextResponse.json(
       { ok: false, error: "SERVER_ERROR" },
       { status: 500 }
