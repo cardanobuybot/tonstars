@@ -3,7 +3,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
 
-const STAR_TON_RATE = 0.0002;
+// тип ответа /api/prices
+type PricesResponse = {
+  ok: boolean;
+  markup_percent: number;
+  tiers: { stars: number; base_ton: number; sell_ton: number }[];
+};
 
 const texts = {
   ru: {
@@ -58,20 +63,55 @@ export default function Page() {
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
+  // динамическая цена с бэка
+  const [pricePerStar, setPricePerStar] = useState<number | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadPrice() {
+      try {
+        const res = await fetch('/api/prices');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+
+        const data: PricesResponse = await res.json();
+
+        // берём пакет 50 звёзд как базовый (если нет — первый пакет)
+        const tier = data.tiers.find((t) => t.stars === 50) ?? data.tiers[0];
+        const p = tier.sell_ton / tier.stars;
+
+        setPricePerStar(p);
+        setPriceError(null);
+      } catch (err) {
+        console.error(err);
+        setPriceError('Ошибка загрузки цены');
+      }
+    }
+
+    loadPrice();
+  }, []);
+
   // валидации
   const userOk = useMemo(() => /^[a-z0-9_]{5,32}$/i.test(username), [username]);
+
   const amountNum = useMemo(() => {
     const digits = amountStr.replace(/[^\d]/g, '');
     const n = parseInt(digits || '0', 10);
     return Number.isFinite(n) ? n : 0;
   }, [amountStr]);
+
   const amtOk = amountNum >= 1;
-  const amountTon = useMemo(() => Number((amountNum * STAR_TON_RATE).toFixed(4)), [amountNum]);
-  const canBuy = userOk && amtOk && !!wallet;
+
+  const amountTon = useMemo(() => {
+    if (!pricePerStar) return 0;
+    return Number((amountNum * pricePerStar).toFixed(4));
+  }, [amountNum, pricePerStar]);
+
+  const canBuy = userOk && amtOk && !!wallet && !!pricePerStar && !priceError;
 
   // баланс
   useEffect(() => {
     let aborted = false;
+
     async function fetchBalance(addr: string) {
       try {
         const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(
@@ -87,12 +127,14 @@ export default function Page() {
         if (!aborted) setBalanceTon(null);
       }
     }
+
     if (addressFriendly) {
       setBalanceTon(null);
       fetchBalance(addressFriendly);
     } else {
       setBalanceTon(null);
     }
+
     return () => {
       aborted = true;
     };
@@ -100,7 +142,8 @@ export default function Page() {
 
   // buy flow (заглушка)
   const onBuy = () => {
-    if (!canBuy) return;
+    if (!canBuy || !pricePerStar) return;
+
     alert(
       lang === 'ru'
         ? `Отправим ${amountNum} Stars пользователю @${username} за ~${amountTon} TON.\n(Тут вызываем TonConnect TX)`
@@ -175,14 +218,14 @@ export default function Page() {
           }}
         />
         {/* helper under username: only hint or error */}
-{(!username || !userOk) && (
-  <div
-    className={username && !userOk ? 'err' : undefined}
-    style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-  >
-    {username ? t.usernameErr : t.usernameHint}
-  </div>
-)}
+        {(!username || !userOk) && (
+          <div
+            className={username && !userOk ? 'err' : undefined}
+            style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
+          >
+            {username ? t.usernameErr : t.usernameHint}
+          </div>
+        )}
 
         {/* amount */}
         <div style={{ height: 14 }} />
@@ -217,7 +260,13 @@ export default function Page() {
           }}
         >
           <div>{t.toPay}</div>
-          <div>≈ {amountTon.toFixed(4)} TON</div>
+          <div>
+            {pricePerStar
+              ? `≈ ${amountTon.toFixed(4)} TON`
+              : priceError
+              ? priceError
+              : '… загружаем цену'}
+          </div>
         </div>
 
         <div
@@ -236,93 +285,101 @@ export default function Page() {
 
         <button
           onClick={onBuy}
-          disabled={!canBuy}
+          disabled={!canBuy || !pricePerStar || !!priceError}
           style={{
             width: '100%',
             height: 54,
             borderRadius: 14,
             border: '1px solid rgba(255,255,255,0.08)',
-            background: canBuy
-              ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
-              : 'rgba(255,255,255,0.06)',
-            color: canBuy ? '#001014' : 'rgba(230,235,255,0.5)',
+            background:
+              canBuy && pricePerStar && !priceError
+                ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
+                : 'rgba(255,255,255,0.06)',
+            color:
+              canBuy && pricePerStar && !priceError
+                ? '#001014'
+                : 'rgba(230,235,255,0.5)',
             fontSize: 18,
             fontWeight: 800,
-            cursor: canBuy ? 'pointer' : 'default'
+            cursor:
+              canBuy && pricePerStar && !priceError ? 'pointer' : 'default'
           }}
         >
           {t.buy}
         </button>
       </div>
 
-      {/* ── BOTTOM BAR: язык + ссылки в одну линию по центру ───────── */}
-<div
-  className="bottom-bar"
-  style={{
-    maxWidth: 840,
-    margin: '28px auto 0',
-    paddingTop: 16,
-    borderTop: '1px solid rgba(255,255,255,0.06)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 20,
-    flexWrap: 'wrap',          // если совсем узко — аккуратно перенесёт
-    opacity: 0.9,
-    fontSize: 15
-  }}
->
-  {/* переключатель языка – чутка левее визуального центра */}
-  <div
-    className="lang-pill"
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 6,
-      background: '#10131a',
-      padding: '2px 6px',
-      borderRadius: 16,
-      border: '1px solid rgba(255,255,255,0.06)',
-      transform: 'translateX(-16px)'
-    }}
-  >
-    <button
-      onClick={() => setLang('ru')}
-      aria-label="RU"
-      style={{
-        padding: '4px 10px',
-        borderRadius: 14,
-        border: '1px solid rgba(255,255,255,0.08)',
-        background: lang === 'ru' ? '#0098ea' : 'transparent',
-        color: lang === 'ru' ? '#fff' : '#cdd6f4',
-        fontWeight: 700
-      }}
-    >
-      RU
-    </button>
-    <button
-      onClick={() => setLang('en')}
-      aria-label="EN"
-      style={{
-        padding: '4px 10px',
-        borderRadius: 14,
-        border: '1px solid rgba(255,255,255,0.08)',
-        background: lang === 'en' ? '#0098ea' : 'transparent',
-        color: lang === 'en' ? '#fff' : '#cdd6f4',
-        fontWeight: 700
-      }}
-    >
-      EN
-    </button>
-  </div>
+      {/* ── BOTTOM BAR: язык + ссылки ───────── */}
+      <div
+        className="bottom-bar"
+        style={{
+          maxWidth: 840,
+          margin: '28px auto 0',
+          paddingTop: 16,
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 20,
+          flexWrap: 'wrap',
+          opacity: 0.9,
+          fontSize: 15
+        }}
+      >
+        {/* переключатель языка */}
+        <div
+          className="lang-pill"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#10131a',
+            padding: '2px 6px',
+            borderRadius: 16,
+            border: '1px solid rgba(255,255,255,0.06)',
+            transform: 'translateX(-16px)'
+          }}
+        >
+          <button
+            onClick={() => setLang('ru')}
+            aria-label="RU"
+            style={{
+              padding: '4px 10px',
+              borderRadius: 14,
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: lang === 'ru' ? '#0098ea' : 'transparent',
+              color: lang === 'ru' ? '#fff' : '#cdd6f4',
+              fontWeight: 700
+            }}
+          >
+            RU
+          </button>
+          <button
+            onClick={() => setLang('en')}
+            aria-label="EN"
+            style={{
+              padding: '4px 10px',
+              borderRadius: 14,
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: lang === 'en' ? '#0098ea' : 'transparent',
+              color: lang === 'en' ? '#fff' : '#cdd6f4',
+              fontWeight: 700
+            }}
+          >
+            EN
+          </button>
+        </div>
 
-  {/* разделители и ссылки */}
-  <a href="/privacy" className="foot-link">{t.policy}</a>
-  <span className="foot-sep">|</span>
-  <a href="/terms" className="foot-link">{t.terms}</a>
-  <span className="foot-sep">|</span>
-  <span className="foot-mute">{t.yearLine}</span>
-</div>
+        <a href="/privacy" className="foot-link">
+          {t.policy}
+        </a>
+        <span className="foot-sep">|</span>
+        <a href="/terms" className="foot-link">
+          {t.terms}
+        </a>
+        <span className="foot-sep">|</span>
+        <span className="foot-mute">{t.yearLine}</span>
+      </div>
     </div>
   );
 }
