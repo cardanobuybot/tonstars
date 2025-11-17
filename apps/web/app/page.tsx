@@ -1,17 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { beginCell } from '@ton/core';
-import {
-  TonConnectButton,
-  useTonWallet,
-  useTonConnectUI
-} from '@tonconnect/ui-react';
+import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 
-const STAR_TON_RATE = 0.0002;
-
-// адрес твоего сервисного кошелька (куда прилетает TON)
-const SERVICE_WALLET = 'UQDTzy_OvK6MewBe0sExiSJqo5vh1hCT_5xq266EHPlcSrTW';
+// БАЗОВЫЙ КУРС (пока константа, потом возьмём с бэка)
+const STAR_TON_RATE = 0.0002; // 1 Star = 0.0002 TON (пример)
 
 const texts = {
   ru: {
@@ -30,7 +23,9 @@ const texts = {
     buy: 'Купить Stars',
     policy: 'Политика',
     terms: 'Условия',
-    yearLine: '© 2025 TonStars'
+    yearLine: '© 2025 TonStars',
+    errorCommon: 'Что-то пошло не так. Попробуйте ещё раз.',
+    errorCreateOrder: 'Ошибка при создании заказа.'
   },
   en: {
     hero: 'Buy Telegram Stars with TON',
@@ -48,30 +43,18 @@ const texts = {
     buy: 'Buy Stars',
     policy: 'Privacy',
     terms: 'Terms',
-    yearLine: '© 2025 TonStars'
+    yearLine: '© 2025 TonStars',
+    errorCommon: 'Something went wrong. Please try again.',
+    errorCreateOrder: 'Failed to create order.'
   }
 };
 
-// helper для base64 из Uint8Array (и в браузере, и в Node)
-function toBase64(bytes: Uint8Array): string {
-  if (typeof Buffer !== 'undefined') {
-    // в Node / полифилленом окружении
-    return Buffer.from(bytes).toString('base64');
-  }
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
+type Lang = 'ru' | 'en';
 
 export default function Page() {
   // язык
-  const [lang, setLang] = useState<'ru' | 'en'>('ru');
+  const [lang, setLang] = useState<Lang>('ru');
   const t = texts[lang];
-
-  // TonConnect UI
-  const [tonConnectUI] = useTonConnectUI();
 
   // форма
   const [username, setUsername] = useState('');
@@ -79,12 +62,16 @@ export default function Page() {
 
   // кошелёк/баланс
   const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
+  // состояние отправки / ошибок
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   // валидации
   const userOk = useMemo(() => /^[a-z0-9_]{5,32}$/i.test(username), [username]);
-
   const amountNum = useMemo(() => {
     const digits = amountStr.replace(/[^\d]/g, '');
     const n = parseInt(digits || '0', 10);
@@ -96,8 +83,7 @@ export default function Page() {
     () => Number((amountNum * STAR_TON_RATE).toFixed(4)),
     [amountNum]
   );
-
-  const canBuy = userOk && amtOk && !!wallet;
+  const canBuy = userOk && amtOk && !!wallet && !isSubmitting;
 
   // баланс
   useEffect(() => {
@@ -128,64 +114,96 @@ export default function Page() {
     };
   }, [addressFriendly]);
 
-  // TonConnect транзакция
+  // helper: показать ошибку
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    // Для MVP можно и alert, но пусть будет тихо под кнопкой
+    console.warn('[TonStars] error:', msg);
+  };
+
+  // buy flow: создание заказа + подготовка к TonConnect-транзакции
   const onBuy = async () => {
     if (!canBuy) return;
 
+    setIsSubmitting(true);
+    setErrorMsg(null);
     try {
-      // простой orderId на фронте (потом заменим на id из backend)
-      const orderId = `F${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-
-      const comment =
-        `order:${orderId};user:@${username};stars:${amountNum}`;
-
-      const body = beginCell()
-        .storeUint(0, 32) // текстовый комментарий
-        .storeStringTail(comment)
-        .endCell();
-
-      const payloadBase64 = toBase64(body.toBoc());
-      const amountNano = BigInt(
-        Math.round(amountTon * 1e9) // TON → nanoTON
-      );
-
-      await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600, // 10 минут
-        messages: [
-          {
-            address: SERVICE_WALLET,
-            amount: amountNano.toString(),
-            payload: payloadBase64
-          }
-        ]
+      // 1. Создаём order на бэке
+      const resp = await fetch('/api/order/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          stars: amountNum,
+          lang
+        })
       });
 
-      if (lang === 'ru') {
-        alert(
-          `Заявка создана.\n` +
-            `Отправлено ~${amountTon} TON за ${amountNum} Stars пользователю @${username}.\n\n` +
-            `orderId: ${orderId}\n` +
-            `После подключения backend мы будем автоматически выдавать звёзды по этому идентификатору.`
-        );
-      } else {
-        alert(
-          `Request created.\n` +
-            `Sent ~${amountTon} TON for ${amountNum} Stars to @${username}.\n\n` +
-            `orderId: ${orderId}\n` +
-            `Later backend will auto-deliver Stars using this id.`
-        );
-      }
-    } catch (e: any) {
-      if (e && e.code === 'USER_REJECTS_ERROR') {
-        // просто тихо выходим если пользователь отменил
+      if (!resp.ok) {
+        showError(t.errorCreateOrder);
+        setIsSubmitting(false);
         return;
       }
-      console.error(e);
+
+      const data = await resp.json();
+
+      if (!data?.ok) {
+        showError(t.errorCreateOrder);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // ожидаем от бэка:
+      // {
+      //   ok: true,
+      //   orderId: string,
+      //   tonAmount: string,    // в TON, строкой
+      //   toAddress: string     // friendly-адрес сервиса
+      // }
+      const { orderId, tonAmount, toAddress } = data as {
+        orderId: string;
+        tonAmount: string;
+        toAddress: string;
+      };
+
+      // Переводим TON → nanoTON (без float)
+      // Например, если бэк вернул "0.1234" TON, мы аккуратно считаем nano
+      const [intPart, fracPartRaw] = tonAmount.split('.');
+      const fracPart = (fracPartRaw || '').padEnd(9, '0').slice(0, 9); // до 9 знаков
+      const nanoStr = `${intPart || '0'}${fracPart}`;
+      const nano = BigInt(nanoStr || '0');
+
+      if (nano <= 0n) {
+        showError(t.errorCommon);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. ДАЛЬШЕ — TonConnect sendTransaction (добавим на следующем шаге)
+      // Сейчас просто покажем alert, что всё ок и есть orderId / сумма
       alert(
         lang === 'ru'
-          ? 'Не удалось отправить транзакцию через TonConnect. Попробуйте ещё раз.'
-          : 'Failed to send transaction via TonConnect. Please try again.'
+          ? `Заказ создан.\nID: ${orderId}\nСумма: ${tonAmount} TON\n(Дальше TonConnect TX)`
+          : `Order created.\nID: ${orderId}\nAmount: ${tonAmount} TON\n(Next: TonConnect TX)`
       );
+
+      // здесь позже будет:
+      //
+      // await tonConnectUI.sendTransaction({
+      //   validUntil: Math.floor(Date.now() / 1000) + 600,
+      //   messages: [
+      //     {
+      //       address: toAddress,
+      //       amount: nano.toString()
+      //       // payload: ... (комментарий с orderId / username / stars)
+      //     }
+      //   ]
+      // });
+    } catch (e) {
+      console.error(e);
+      showError(t.errorCommon);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -195,9 +213,7 @@ export default function Page() {
       <div data-hdr style={{ marginBottom: 12 }}>
         <div data-hdr-left>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
-            TonStars
-          </div>
+          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>TonStars</div>
         </div>
         <div data-hdr-right>
           <div data-tc-button>
@@ -219,15 +235,7 @@ export default function Page() {
       >
         {t.hero}
       </h1>
-      <div
-        style={{
-          opacity: 0.75,
-          marginBottom: 18,
-          textAlign: 'center'
-        }}
-      >
-        {t.sub}
-      </div>
+      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>{t.sub}</div>
 
       {/* ── CARD ─────────────────────────────────────────────── */}
       <div
@@ -241,24 +249,10 @@ export default function Page() {
           margin: '0 auto'
         }}
       >
-        <div
-          style={{
-            fontSize: 22,
-            fontWeight: 800,
-            marginBottom: 14
-          }}
-        >
-          {t.buyCardTitle}
-        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>{t.buyCardTitle}</div>
 
         {/* username */}
-        <label
-          style={{
-            display: 'block',
-            marginBottom: 8,
-            opacity: 0.9
-          }}
-        >
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
           {t.usernameLabel}
         </label>
         <input
@@ -281,7 +275,7 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        {/* helper под username: либо подсказка, либо ошибка */}
+        {/* helper под username: только подсказка или ошибка */}
         {(!username || !userOk) && (
           <div
             className={username && !userOk ? 'err' : undefined}
@@ -293,13 +287,7 @@ export default function Page() {
 
         {/* amount */}
         <div style={{ height: 14 }} />
-        <label
-          style={{
-            display: 'block',
-            marginBottom: 8,
-            opacity: 0.9
-          }}
-        >
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
           {t.amountLabel}
         </label>
         <input
@@ -307,9 +295,7 @@ export default function Page() {
           pattern="[0-9]*"
           value={amountStr}
           onChange={(e) => setAmountStr(e.target.value)}
-          className={
-            amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined
-          }
+          className={amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined}
           style={{
             width: '100%',
             height: 52,
@@ -322,7 +308,7 @@ export default function Page() {
           }}
         />
 
-        {/* итог */}
+        {/* итог: сумма + баланс */}
         <div
           style={{
             display: 'flex',
@@ -348,12 +334,22 @@ export default function Page() {
           }}
         >
           <div>{t.balance}</div>
-          <div>
-            {balanceTon == null
-              ? '— TON'
-              : `${balanceTon.toFixed(4)} TON`}
-          </div>
+          <div>{balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}</div>
         </div>
+
+        {/* ошибка под формой, если есть */}
+        {errorMsg && (
+          <div
+            style={{
+              marginBottom: 10,
+              fontSize: 14,
+              color: '#ff6b6b',
+              opacity: 0.95
+            }}
+          >
+            {errorMsg}
+          </div>
+        )}
 
         <button
           onClick={onBuy}
@@ -369,10 +365,11 @@ export default function Page() {
             color: canBuy ? '#001014' : 'rgba(230,235,255,0.5)',
             fontSize: 18,
             fontWeight: 800,
-            cursor: canBuy ? 'pointer' : 'default'
+            cursor: canBuy ? 'pointer' : 'default',
+            transition: 'opacity 0.15s ease'
           }}
         >
-          {t.buy}
+          {isSubmitting ? (lang === 'ru' ? 'Создание ордера…' : 'Creating order…') : t.buy}
         </button>
       </div>
 
@@ -393,6 +390,7 @@ export default function Page() {
           fontSize: 15
         }}
       >
+        {/* переключатель языка – лёгкий сдвиг влево */}
         <div
           className="lang-pill"
           style={{
