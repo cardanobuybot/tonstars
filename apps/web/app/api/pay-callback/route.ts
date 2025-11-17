@@ -1,20 +1,15 @@
-// apps/web/app/api/pay-callback/route.ts
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
-// подключение к базе
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
-// наш сервисный кошелёк, сразу в нижнем регистре
-const SERVICE_WALLET = (process.env.TON_PAYMENT_WALLET ?? "").toLowerCase();
+// сразу приводим к нижнему регистру и гарантируем строку
+const SERVICE_WALLET = (process.env.TON_PAYMENT_WALLET || "").toLowerCase();
+const TONAPI_KEY = process.env.TONAPI_KEY || "";
 
-// TonAPI key (тонконсоль)
-const TONAPI_KEY = process.env.TONAPI_KEY;
-
-// тело запроса от фронта
 type PayCallbackBody = {
   order_id?: string;
   tx_hash?: string;
@@ -22,7 +17,6 @@ type PayCallbackBody = {
 
 export async function POST(req: Request) {
   try {
-    // проверяем, что env’ы вообще заданы
     if (!SERVICE_WALLET) {
       console.error("TON_PAYMENT_WALLET is not set");
       return NextResponse.json(
@@ -50,7 +44,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1) достаём ордер из базы
+    // 1) достаём ордер
     const client1 = await pool.connect();
     let order: any;
 
@@ -79,8 +73,9 @@ export async function POST(req: Request) {
       client1.release();
     }
 
-    // ожидаемая сумма (в нанотонах)
-    const expectedNano = BigInt(Math.round(Number(order.ton_amount) * 1e9));
+    const expectedNano = BigInt(
+      Math.round(Number(order.ton_amount) * 1e9)
+    );
 
     // 2) проверяем транзакцию через TonAPI
     const txUrl = `https://tonapi.io/v2/blockchain/transactions/${txHash}`;
@@ -102,7 +97,6 @@ export async function POST(req: Request) {
 
     const txData: any = await txRes.json();
 
-    // в разных схемах TonAPI немного отличаются поля — соберём все сообщения
     const msgs: any[] = [
       ...(txData?.in_msg ? [txData.in_msg] : []),
       ...(Array.isArray(txData?.out_msgs) ? txData.out_msgs : []),
@@ -119,20 +113,23 @@ export async function POST(req: Request) {
         m?.recipient ||
         m?.to_address;
 
-      const addr = typeof rawAddr === "string" ? rawAddr.toLowerCase() : "";
+      const addr =
+        typeof rawAddr === "string" ? rawAddr.toLowerCase() : "";
 
       if (addr === SERVICE_WALLET) {
         okRecipient = true;
 
-        // сумма
         const valueNano = BigInt(
-          m?.value ?? m?.amount ?? m?.value_ ?? m?.msg_data?.amount ?? 0
+          m?.value ??
+            m?.amount ??
+            m?.value_ ??
+            m?.msg_data?.amount ??
+            0
         );
         if (valueNano >= expectedNano) {
           okAmount = true;
         }
 
-        // комментарий / payload text
         const cmt: string =
           m?.message ||
           m?.comment ||
@@ -156,7 +153,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 3) помечаем ордер как "paid" и сохраняем хэш транзакции
+    // 3) обновляем статус
     const client2 = await pool.connect();
     try {
       await client2.query(
@@ -166,7 +163,7 @@ export async function POST(req: Request) {
             ton_tx_hash = $2,
             updated_at = now()
         WHERE id = $1
-        `,
+      `,
         [orderId, txHash]
       );
     } finally {
