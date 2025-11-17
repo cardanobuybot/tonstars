@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    ton_payme: process.env.TON_PAYME ?? "missing",
-    database_url_exists: !!process.env.DATABASE_URL,
-  });
+  try {
+    return NextResponse.json({
+      ok: true,
+      ton_payment_wallet: process.env.TON_PAYMENT_WALLET || "missing",
+      db_url_present: !!process.env.DATABASE_URL,
+    });
+  } catch (err: any) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: err.message,
+      },
+      { status: 500 }
+    );
+  }
 }
