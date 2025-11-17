@@ -1,21 +1,19 @@
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
-// один общй Pool для всех запросов
+// один общий Pool для всех запросов
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
 // временный курс: 1 звезда ≈ 0.0002 TON
-// потом привяжем к /api/prices
 const STAR_TON_RATE = 0.0002;
 
-// кошелёк, куда прилетают оплаты (мы уже задавали его в Vercel)
+// кошелёк, куда прилетают оплаты (env-переменная на Vercel)
 const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET;
 
 if (!SERVICE_WALLET) {
-  // чтобы сразу увидеть проблему, если забыли переменную
   console.warn("TON_PAYMENT_WALLET is not set in environment");
 }
 
@@ -26,6 +24,14 @@ type CreateOrderBody = {
 
 export async function POST(req: Request) {
   try {
+    // safety: проверяем, что кошелёк вообще есть
+    if (!SERVICE_WALLET) {
+      return NextResponse.json(
+        { ok: false, error: "NO_SERVICE_WALLET" },
+        { status: 500 }
+      );
+    }
+
     const body = (await req.json()) as CreateOrderBody;
 
     const rawUsername = String(body.username || "").trim();
@@ -73,7 +79,7 @@ export async function POST(req: Request) {
     // формируем комментарий для TON-транзакции
     const comment = `order:${orderId};user:@${username};stars:${stars}`;
 
-    // ответ фронту — всё, что нужно TonConnect’у
+    // ответ фронту
     return NextResponse.json({
       ok: true,
       order_id: orderId,
@@ -84,7 +90,10 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("order/create error:", err);
     return NextResponse.json(
-      { ok: false, error: "SERVER_ERROR" },
+      {
+        ok: false,
+        error: err?.code || err?.message || "SERVER_ERROR",
+      },
       { status: 500 }
     );
   }
