@@ -1,28 +1,25 @@
 import { NextResponse } from "next/server";
-import { Client } from "pg";
+import { Pool } from "pg";
 
 export async function GET() {
   try {
-    const client = new Client({
+    const pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
     });
 
-    await client.connect();
-
-    const res = await client.query("SELECT NOW()");
-
-    await client.end();
-
+    const result = await pool.query("SELECT NOW()");
     return NextResponse.json({
       ok: true,
-      message: "DB connected",
-      time: res.rows[0].now
+      db_time: result.rows[0].now,
     });
   } catch (err: any) {
-    return NextResponse.json({
-      ok: false,
-      error: err.message
-    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: err.message,
+      },
+      { status: 500 }
+    );
   }
 }
