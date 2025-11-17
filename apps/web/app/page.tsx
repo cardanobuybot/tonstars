@@ -3,8 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TonConnectButton, useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 
-// БАЗОВЫЙ КУРС (пока константа, потом возьмём с бэка)
-const STAR_TON_RATE = 0.0002; // 1 Star = 0.0002 TON (пример)
+const STAR_TON_RATE = 0.0002;
 
 const texts = {
   ru: {
@@ -24,8 +23,9 @@ const texts = {
     policy: 'Политика',
     terms: 'Условия',
     yearLine: '© 2025 TonStars',
-    errorCommon: 'Что-то пошло не так. Попробуйте ещё раз.',
-    errorCreateOrder: 'Ошибка при создании заказа.'
+    needWallet: 'Подключите TON-кошелёк',
+    orderError: 'Ошибка при создании заказа',
+    txSent: 'Транзакция отправлена, ждём подтверждения…'
   },
   en: {
     hero: 'Buy Telegram Stars with TON',
@@ -44,34 +44,39 @@ const texts = {
     policy: 'Privacy',
     terms: 'Terms',
     yearLine: '© 2025 TonStars',
-    errorCommon: 'Something went wrong. Please try again.',
-    errorCreateOrder: 'Failed to create order.'
+    needWallet: 'Connect TON wallet',
+    orderError: 'Error while creating order',
+    txSent: 'Transaction sent, waiting for confirmation…'
   }
 };
 
-type Lang = 'ru' | 'en';
-
 export default function Page() {
-  // язык
-  const [lang, setLang] = useState<Lang>('ru');
+  const [lang, setLang] = useState<'ru' | 'en'>('ru');
   const t = texts[lang];
+
+  // TonConnect
+  const wallet = useTonWallet();
+  const [tonConnectUI] = useTonConnectUI();
+  const addressFriendly = wallet?.account?.address;
 
   // форма
   const [username, setUsername] = useState('');
-  const [amountStr, setAmountStr] = useState('100');
+  const [amountStr, setAmountStr] = useState('1');
 
-  // кошелёк/баланс
-  const wallet = useTonWallet();
-  const [tonConnectUI] = useTonConnectUI();
+  // баланс
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
-  const addressFriendly = wallet?.account?.address;
 
-  // состояние отправки / ошибок
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // ui-состояния
+  const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const [infoText, setInfoText] = useState<string | null>(null);
 
   // валидации
-  const userOk = useMemo(() => /^[a-z0-9_]{5,32}$/i.test(username), [username]);
+  const userOk = useMemo(
+    () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '')),
+    [username]
+  );
+
   const amountNum = useMemo(() => {
     const digits = amountStr.replace(/[^\d]/g, '');
     const n = parseInt(digits || '0', 10);
@@ -83,11 +88,13 @@ export default function Page() {
     () => Number((amountNum * STAR_TON_RATE).toFixed(4)),
     [amountNum]
   );
-  const canBuy = userOk && amtOk && !!wallet && !isSubmitting;
+
+  const canBuy = userOk && amtOk && !!wallet && !loading;
 
   // баланс
   useEffect(() => {
     let aborted = false;
+
     async function fetchBalance(addr: string) {
       try {
         const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(
@@ -103,113 +110,85 @@ export default function Page() {
         if (!aborted) setBalanceTon(null);
       }
     }
+
     if (addressFriendly) {
       setBalanceTon(null);
       fetchBalance(addressFriendly);
     } else {
       setBalanceTon(null);
     }
+
     return () => {
       aborted = true;
     };
   }, [addressFriendly]);
 
-  // helper: показать ошибку
-  const showError = (msg: string) => {
-    setErrorMsg(msg);
-    // Для MVP можно и alert, но пусть будет тихо под кнопкой
-    console.warn('[TonStars] error:', msg);
-  };
-
-  // buy flow: создание заказа + подготовка к TonConnect-транзакции
+  // клик "Купить"
   const onBuy = async () => {
-    if (!canBuy) return;
+    setErrorText(null);
+    setInfoText(null);
 
-    setIsSubmitting(true);
-    setErrorMsg(null);
+    if (!wallet) {
+      setErrorText(t.needWallet);
+      return;
+    }
+    if (!userOk || !amtOk) {
+      // на всякий пожарный, хотя кнопка и так дизейблится
+      return;
+    }
+
     try {
-      // 1. Создаём order на бэке
-      const resp = await fetch('/api/order/create', {
+      setLoading(true);
+
+      // 1) создаём ордер на бэке
+      const res = await fetch('/api/order/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           username,
-          stars: amountNum,
-          lang
+          stars: amountNum
         })
       });
 
-      if (!resp.ok) {
-        showError(t.errorCreateOrder);
-        setIsSubmitting(false);
+      const data = await res.json().catch(() => null as any);
+
+      if (!res.ok || !data?.ok) {
+        // ВАЖНО: показываем код ошибки с бэка
+        const code = data?.error || `HTTP_${res.status}`;
+        console.log('order/create error:', code, data);
+        setErrorText(`${t.orderError}: ${code}`);
         return;
       }
 
-      const data = await resp.json();
+      // 2) формируем транзакцию для TonConnect
+      const nanoAmount = BigInt(Math.round(data.ton_amount * 1e9));
 
-      if (!data?.ok) {
-        showError(t.errorCreateOrder);
-        setIsSubmitting(false);
-        return;
-      }
+      await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 300,
+        messages: [
+          {
+            address: data.to_address,
+            amount: nanoAmount.toString(),
+            payload: undefined,
+            stateInit: undefined
+          }
+        ]
+      });
 
-      // ожидаем от бэка:
-      // {
-      //   ok: true,
-      //   orderId: string,
-      //   tonAmount: string,    // в TON, строкой
-      //   toAddress: string     // friendly-адрес сервиса
-      // }
-      const { orderId, tonAmount, toAddress } = data as {
-        orderId: string;
-        tonAmount: string;
-        toAddress: string;
-      };
-
-      // Переводим TON → nanoTON (без float)
-      // Например, если бэк вернул "0.1234" TON, мы аккуратно считаем nano
-      const [intPart, fracPartRaw] = tonAmount.split('.');
-      const fracPart = (fracPartRaw || '').padEnd(9, '0').slice(0, 9); // до 9 знаков
-      const nanoStr = `${intPart || '0'}${fracPart}`;
-      const nano = BigInt(nanoStr || '0');
-
-      if (nano <= 0n) {
-        showError(t.errorCommon);
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 2. ДАЛЬШЕ — TonConnect sendTransaction (добавим на следующем шаге)
-      // Сейчас просто покажем alert, что всё ок и есть orderId / сумма
-      alert(
-        lang === 'ru'
-          ? `Заказ создан.\nID: ${orderId}\nСумма: ${tonAmount} TON\n(Дальше TonConnect TX)`
-          : `Order created.\nID: ${orderId}\nAmount: ${tonAmount} TON\n(Next: TonConnect TX)`
-      );
-
-      // здесь позже будет:
-      //
-      // await tonConnectUI.sendTransaction({
-      //   validUntil: Math.floor(Date.now() / 1000) + 600,
-      //   messages: [
-      //     {
-      //       address: toAddress,
-      //       amount: nano.toString()
-      //       // payload: ... (комментарий с orderId / username / stars)
-      //     }
-      //   ]
-      // });
-    } catch (e) {
-      console.error(e);
-      showError(t.errorCommon);
+      setInfoText(t.txSent);
+    } catch (err: any) {
+      console.error('onBuy error', err);
+      setErrorText(`${t.orderError}: ${String(err?.message || err)}`);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
     <div className="container safe-bottom" style={{ padding: '32px 16px 28px' }}>
-      {/* ── HEADER ───────────────────────────────────────────── */}
+      {/* HEADER */}
       <div data-hdr style={{ marginBottom: 12 }}>
         <div data-hdr-left>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
@@ -222,7 +201,7 @@ export default function Page() {
         </div>
       </div>
 
-      {/* ── HERO ─────────────────────────────────────────────── */}
+      {/* HERO */}
       <h1
         style={{
           margin: '28px auto 8px',
@@ -237,7 +216,7 @@ export default function Page() {
       </h1>
       <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>{t.sub}</div>
 
-      {/* ── CARD ─────────────────────────────────────────────── */}
+      {/* CARD */}
       <div
         style={{
           background: 'linear-gradient(180deg,#0c0f14,#0b0e13)',
@@ -252,9 +231,7 @@ export default function Page() {
         <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>{t.buyCardTitle}</div>
 
         {/* username */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-          {t.usernameLabel}
-        </label>
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.usernameLabel}</label>
         <input
           inputMode="text"
           autoCapitalize="off"
@@ -275,7 +252,6 @@ export default function Page() {
             outline: 'none'
           }}
         />
-        {/* helper под username: только подсказка или ошибка */}
         {(!username || !userOk) && (
           <div
             className={username && !userOk ? 'err' : undefined}
@@ -287,9 +263,7 @@ export default function Page() {
 
         {/* amount */}
         <div style={{ height: 14 }} />
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-          {t.amountLabel}
-        </label>
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>{t.amountLabel}</label>
         <input
           inputMode="numeric"
           pattern="[0-9]*"
@@ -308,7 +282,7 @@ export default function Page() {
           }}
         />
 
-        {/* итог: сумма + баланс */}
+        {/* итоги */}
         <div
           style={{
             display: 'flex',
@@ -328,7 +302,7 @@ export default function Page() {
             display: 'flex',
             justifyContent: 'space-between',
             marginTop: 4,
-            marginBottom: 16,
+            marginBottom: 8,
             fontSize: 16,
             opacity: 0.85
           }}
@@ -337,18 +311,12 @@ export default function Page() {
           <div>{balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}</div>
         </div>
 
-        {/* ошибка под формой, если есть */}
-        {errorMsg && (
-          <div
-            style={{
-              marginBottom: 10,
-              fontSize: 14,
-              color: '#ff6b6b',
-              opacity: 0.95
-            }}
-          >
-            {errorMsg}
-          </div>
+        {/* ошибки / инфо */}
+        {errorText && (
+          <div style={{ color: '#ff6b6b', marginBottom: 8, fontSize: 14 }}>{errorText}</div>
+        )}
+        {infoText && (
+          <div style={{ color: '#4cd964', marginBottom: 8, fontSize: 14 }}>{infoText}</div>
         )}
 
         <button
@@ -365,15 +333,14 @@ export default function Page() {
             color: canBuy ? '#001014' : 'rgba(230,235,255,0.5)',
             fontSize: 18,
             fontWeight: 800,
-            cursor: canBuy ? 'pointer' : 'default',
-            transition: 'opacity 0.15s ease'
+            cursor: canBuy ? 'pointer' : 'default'
           }}
         >
-          {isSubmitting ? (lang === 'ru' ? 'Создание ордера…' : 'Creating order…') : t.buy}
+          {t.buy}
         </button>
       </div>
 
-      {/* ── BOTTOM BAR: язык + ссылки в одну линию по центру ───────── */}
+      {/* BOTTOM BAR */}
       <div
         className="bottom-bar"
         style={{
@@ -390,7 +357,6 @@ export default function Page() {
           fontSize: 15
         }}
       >
-        {/* переключатель языка – лёгкий сдвиг влево */}
         <div
           className="lang-pill"
           style={{
