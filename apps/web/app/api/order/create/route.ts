@@ -1,109 +1,65 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-// 1 Star = 0.0002 TON
-const STAR_TON_RATE = 0.0002;
-// В нанотонах: 0.0002 * 1e9 = 200000
-const STAR_PRICE_NANO = 200_000n;
-
+/**
+ * Подключение к базе Neon через переменную Vercel: DATABASE_URL
+ */
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false }
 });
 
-type CreateOrderBody = {
-  username?: string;
-  starsAmount?: number;
-  lang?: "ru" | "en";
-};
+// базовая цена звезды в TON
+const BASE_PRICE_TON = 0.0002;
 
-export async function POST(req: NextRequest) {
+// твоя комиссия
+const FEE_PERCENT = 0.03; // 3%
+
+export async function POST(req: Request) {
   try {
-    const merchantWallet = process.env.TON_PAYMENT_WALLET;
-    if (!merchantWallet) {
-      return NextResponse.json(
-        { ok: false, error: "TON_PAYMENT_WALLET is not set" },
-        { status: 500 }
-      );
+    const body = await req.json();
+    const { username, stars } = body;
+
+    if (!username || typeof username !== "string") {
+      return NextResponse.json({ ok: false, error: "NO_USERNAME" }, { status: 400 });
+    }
+    if (!stars || typeof stars !== "number" || stars < 1) {
+      return NextResponse.json({ ok: false, error: "BAD_STARS" }, { status: 400 });
     }
 
-    const body = (await req.json()) as CreateOrderBody;
+    // итоговая цена (TON)
+    const base = stars * BASE_PRICE_TON;
+    const withFee = base * (1 + FEE_PERCENT);
+    const amountTon = Number(withFee.toFixed(4));
 
-    const username = (body.username || "").trim().toLowerCase();
-    const starsAmount = Number(body.starsAmount || 0);
-    const lang: "ru" | "en" = body.lang === "en" ? "en" : "ru";
-
-    // Простая валидация
-    if (!/^[a-z0-9_]{5,32}$/i.test(username)) {
-      return NextResponse.json(
-        { ok: false, error: "INVALID_USERNAME" },
-        { status: 400 }
-      );
-    }
-
-    if (!Number.isFinite(starsAmount) || starsAmount < 1) {
-      return NextResponse.json(
-        { ok: false, error: "INVALID_STARS_AMOUNT" },
-        { status: 400 }
-      );
-    }
-
-    // Считаем сумму в TON
-    const tonAmount = Number((starsAmount * STAR_TON_RATE).toFixed(4));
-    const tonAmountStr = tonAmount.toFixed(4);
-
-    // В нанотонах для deeplink
-    const nanoAmount = BigInt(Math.trunc(starsAmount)) * STAR_PRICE_NANO;
-
-    // Сохраняем заказ в БД
-    const client = await pool.connect();
-    try {
-      const insertRes = await client.query(
-        `
-        INSERT INTO orders (
-          tg_username,
-          stars_amount,
-          ton_amount,
-          pay_wallet_address,
-          status,
-          lang
-        )
-        VALUES ($1, $2, $3, $4, 'pending', $5)
-        RETURNING id;
-        `,
-        [username, starsAmount, tonAmountStr, merchantWallet, lang]
-      );
-
-      const orderId: number = insertRes.rows[0].id;
-      const comment = `order:${orderId}`;
-
-      const tonDeeplink = `ton://transfer/${merchantWallet}?amount=${nanoAmount.toString()}&text=${encodeURIComponent(
-        comment
-      )}`;
-
-      return NextResponse.json(
-        {
-          ok: true,
-          order_id: orderId,
-          username,
-          stars_amount: starsAmount,
-          ton_amount: tonAmountStr,
-          comment,
-          ton_deeplink: tonDeeplink,
-        },
-        { status: 201 }
-      );
-    } finally {
-      client.release();
-    }
-  } catch (err: any) {
-    console.error("create order error:", err);
-    return NextResponse.json(
-      { ok: false, error: err?.message || "INTERNAL_ERROR" },
-      { status: 500 }
+    // создаём заказ в БД
+    const result = await pool.query(
+      `INSERT INTO orders (username, stars, amount_ton, status)
+       VALUES ($1, $2, $3, 'pending')
+       RETURNING id`,
+      [username, stars, amountTon]
     );
+
+    const orderId = result.rows[0].id;
+
+    // сервисный кошелёк (из Vercel переменной)
+    const wallet = process.env.MY_TON_WALLET;
+    if (!wallet) {
+      return NextResponse.json({ ok: false, error: "NO_SERVICE_WALLET" });
+    }
+
+    // комментарий для TonConnect транзакции
+    const memo = `order:${orderId};user:@${username};stars:${stars}`;
+
+    return NextResponse.json({
+      ok: true,
+      orderId,
+      amountTon,
+      wallet,
+      memo
+    });
+  } catch (err) {
+    console.error("CREATE ORDER ERROR:", err);
+    return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
   }
 }
