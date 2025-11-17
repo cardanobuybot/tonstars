@@ -1,65 +1,91 @@
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
-/**
- * Подключение к базе Neon через переменную Vercel: DATABASE_URL
- */
+// один общй Pool для всех запросов
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
 });
 
-// базовая цена звезды в TON
-const BASE_PRICE_TON = 0.0002;
+// временный курс: 1 звезда ≈ 0.0002 TON
+// потом привяжем к /api/prices
+const STAR_TON_RATE = 0.0002;
 
-// твоя комиссия
-const FEE_PERCENT = 0.03; // 3%
+// кошелёк, куда прилетают оплаты (мы уже задавали его в Vercel)
+const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET;
+
+if (!SERVICE_WALLET) {
+  // чтобы сразу увидеть проблему, если забыли переменную
+  console.warn("TON_PAYMENT_WALLET is not set in environment");
+}
+
+type CreateOrderBody = {
+  username?: string;
+  stars?: number;
+};
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { username, stars } = body;
+    const body = (await req.json()) as CreateOrderBody;
 
-    if (!username || typeof username !== "string") {
-      return NextResponse.json({ ok: false, error: "NO_USERNAME" }, { status: 400 });
-    }
-    if (!stars || typeof stars !== "number" || stars < 1) {
-      return NextResponse.json({ ok: false, error: "BAD_STARS" }, { status: 400 });
-    }
+    const rawUsername = String(body.username || "").trim();
+    const stars = Number(body.stars);
 
-    // итоговая цена (TON)
-    const base = stars * BASE_PRICE_TON;
-    const withFee = base * (1 + FEE_PERCENT);
-    const amountTon = Number(withFee.toFixed(4));
-
-    // создаём заказ в БД
-    const result = await pool.query(
-      `INSERT INTO orders (username, stars, amount_ton, status)
-       VALUES ($1, $2, $3, 'pending')
-       RETURNING id`,
-      [username, stars, amountTon]
-    );
-
-    const orderId = result.rows[0].id;
-
-    // сервисный кошелёк (из Vercel переменной)
-    const wallet = process.env.MY_TON_WALLET;
-    if (!wallet) {
-      return NextResponse.json({ ok: false, error: "NO_SERVICE_WALLET" });
+    // --- валидация юзернейма ---
+    if (!rawUsername || !/^[a-z0-9_]{5,32}$/i.test(rawUsername.replace(/^@/, ""))) {
+      return NextResponse.json(
+        { ok: false, error: "BAD_USERNAME" },
+        { status: 400 }
+      );
     }
 
-    // комментарий для TonConnect транзакции
-    const memo = `order:${orderId};user:@${username};stars:${stars}`;
+    // --- валидация количества звёзд ---
+    if (!Number.isFinite(stars) || stars < 1 || !Number.isInteger(stars)) {
+      return NextResponse.json(
+        { ok: false, error: "BAD_STARS" },
+        { status: 400 }
+      );
+    }
 
+    const username = rawUsername.replace(/^@/, "").toLowerCase();
+
+    // считаем сумму в TON
+    const tonAmount = Number((stars * STAR_TON_RATE).toFixed(4));
+
+    // вставляем ордер в star_orders
+    const client = await pool.connect();
+    let orderId: string;
+
+    try {
+      const res = await client.query(
+        `
+        INSERT INTO star_orders (tg_username, stars, ton_amount, status, comment)
+        VALUES ($1, $2, $3, 'pending', '')
+        RETURNING id
+      `,
+        [username, stars, tonAmount]
+      );
+      orderId = String(res.rows[0].id);
+    } finally {
+      client.release();
+    }
+
+    // формируем комментарий для TON-транзакции
+    const comment = `order:${orderId};user:@${username};stars:${stars}`;
+
+    // ответ фронту — всё, что нужно TonConnect’у
     return NextResponse.json({
       ok: true,
-      orderId,
-      amountTon,
-      wallet,
-      memo
+      order_id: orderId,
+      to_address: SERVICE_WALLET,
+      ton_amount: tonAmount,
+      comment,
     });
-  } catch (err) {
-    console.error("CREATE ORDER ERROR:", err);
-    return NextResponse.json({ ok: false, error: "SERVER_ERROR" }, { status: 500 });
+  } catch (err: any) {
+    console.error("order/create error:", err);
+    return NextResponse.json(
+      { ok: false, error: "SERVER_ERROR" },
+      { status: 500 }
+    );
   }
 }
