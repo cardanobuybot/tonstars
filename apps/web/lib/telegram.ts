@@ -1,45 +1,32 @@
 // apps/web/lib/telegram.ts
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const DEBUG_CHAT_ID = process.env.DEBUG_TELEGRAM_CHAT_ID;
 
-if (!BOT_TOKEN) {
-  console.warn("TELEGRAM_BOT_TOKEN is not set");
-}
-
-const API_BASE = BOT_TOKEN
+// Базовый URL к Telegram Bot API
+const API_URL = BOT_TOKEN
   ? `https://api.telegram.org/bot${BOT_TOKEN}`
-  : "";
+  : '';
 
-export async function sendTelegramMessage(chatId: string | number, text: string) {
-  if (!BOT_TOKEN) {
-    throw new Error("TELEGRAM_BOT_TOKEN is not configured");
+/**
+ * Заглушка под будущую выдачу Stars.
+ * Сейчас просто логирует, без реального sendGiftStars.
+ * Потом сюда добавим реальный вызов Telegram API.
+ */
+export async function sendGiftStars(username: string, stars: number) {
+  if (!BOT_TOKEN || !API_URL) {
+    console.warn('TELEGRAM_BOT_TOKEN is not set, cannot send stars');
+    return { ok: false as const, error: 'NO_BOT_TOKEN' as const };
   }
 
-  const res = await fetch(`${API_BASE}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-    }),
-  });
+  try {
+    console.log('sendGiftStars STUB called', { username, stars });
 
-  const data = await res.json();
+    // TODO: здесь позже сделаем настоящий запрос к Telegram Bot API:
+    // POST https://api.telegram.org/bot<TOKEN>/sendGiftStars (или нужный метод)
 
-  if (!res.ok || !data.ok) {
-    console.error("Telegram sendMessage error:", data);
-    throw new Error("TELEGRAM_SEND_ERROR");
+    return { ok: true as const };
+  } catch (err) {
+    console.error('sendGiftStars error:', err);
+    return { ok: false as const, error: 'TG_ERROR' as const };
   }
-
-  return data;
-}
-
-// Удобная обёртка для тестов — шлём самому себе
-export async function sendDebugMessage(text: string) {
-  if (!DEBUG_CHAT_ID) {
-    console.warn("DEBUG_TELEGRAM_CHAT_ID is not set");
-    return;
-  }
-  return sendTelegramMessage(DEBUG_CHAT_ID, text);
 }
