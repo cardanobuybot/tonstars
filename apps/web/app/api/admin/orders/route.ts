@@ -1,99 +1,95 @@
-// apps/web/app/api/admin/orders/route.ts
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false }
 });
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-
-type StatusFilter =
-  | "open"
-  | "pending"
-  | "paid"
-  | "delivered"
-  | "refunded"
-  | "all";
-
-function isAuthorized(req: Request): boolean {
-  const headerKey = req.headers.get("x-admin-key") ?? "";
-  if (!ADMIN_PASSWORD) {
-    console.warn("ADMIN_PASSWORD is not set in environment");
+// =============================
+//   ADMIN AUTH
+// =============================
+function checkAdmin(req: Request): boolean {
+  const adminKey = process.env.ADMIN_PANEL_TOKEN;
+  if (!adminKey) {
+    console.error("ADMIN_PANEL_TOKEN is NOT set");
     return false;
   }
-  return headerKey === ADMIN_PASSWORD;
+
+  // 1) Проверяем header
+  const hdr = req.headers.get("x-admin-token");
+  if (hdr && hdr === adminKey) return true;
+
+  // 2) Проверяем query-параметр: ?key=...
+  const url = new URL(req.url);
+  const key = url.searchParams.get("key");
+  if (key && key === adminKey) return true;
+
+  return false;
 }
 
+// =========================================================
+// GET  — получить список заказов
+// =========================================================
 export async function GET(req: Request) {
+  if (!checkAdmin(req)) {
+    return NextResponse.json(
+      { ok: false, error: "UNAUTHORIZED" },
+      { status: 401 }
+    );
+  }
+
+  const url = new URL(req.url);
+  const status = url.searchParams.get("status") || "open";
+
+  const client = await pool.connect();
   try {
-    if (!isAuthorized(req)) {
-      return NextResponse.json(
-        { ok: false, error: "UNAUTHORIZED" },
-        { status: 401 }
-      );
+    let query = `
+      SELECT *
+      FROM star_orders
+    `;
+
+    const params: any[] = [];
+
+    if (status !== "all") {
+      query += ` WHERE status = $1 `;
+      params.push(status);
     }
 
-    const url = new URL(req.url);
-    const status = (url.searchParams.get("status") || "open") as StatusFilter;
+    query += ` ORDER BY id DESC `;
 
-    const client = await pool.connect();
-    try {
-      let query = "SELECT * FROM star_orders";
-      const params: any[] = [];
+    const res = await client.query(query, params);
 
-      if (status === "open") {
-        // открытые: pending + paid
-        query += " WHERE status IN ('pending','paid')";
-      } else if (status !== "all") {
-        query += " WHERE status = $1";
-        params.push(status);
-      }
-
-      query += " ORDER BY created_at DESC LIMIT 200";
-
-      const res = await client.query(query, params);
-
-      return NextResponse.json({
-        ok: true,
-        orders: res.rows,
-      });
-    } catch (err) {
-      console.error("admin/orders GET db error:", err);
-      return NextResponse.json(
-        { ok: false, error: "DB_ERROR" },
-        { status: 500 }
-      );
-    } finally {
-      client.release();
-    }
+    return NextResponse.json({
+      ok: true,
+      orders: res.rows
+    });
   } catch (err) {
-    console.error("admin/orders GET error:", err);
+    console.error("ADMIN GET error:", err);
     return NextResponse.json(
       { ok: false, error: "SERVER_ERROR" },
       { status: 500 }
     );
+  } finally {
+    client.release();
   }
 }
 
-type AdminActionBody = {
-  id?: number;
-  action?: "mark_delivered";
-};
-
+// =========================================================
+// POST — действие над заказом ("mark_delivered")
+// =========================================================
 export async function POST(req: Request) {
-  try {
-    if (!isAuthorized(req)) {
-      return NextResponse.json(
-        { ok: false, error: "UNAUTHORIZED" },
-        { status: 401 }
-      );
-    }
+  if (!checkAdmin(req)) {
+    return NextResponse.json(
+      { ok: false, error: "UNAUTHORIZED" },
+      { status: 401 }
+    );
+  }
 
-    const body = (await req.json()) as AdminActionBody;
-    const id = body.id;
-    const action = body.action;
+  try {
+    const body = await req.json();
+    const id = Number(body?.id);
+    const action = String(body?.action || "").trim();
 
     if (!id || !action) {
       return NextResponse.json(
@@ -107,12 +103,12 @@ export async function POST(req: Request) {
       if (action === "mark_delivered") {
         const res = await client.query(
           `
-          UPDATE star_orders
-          SET status = 'delivered',
-              updated_at = now()
-          WHERE id = $1
-          RETURNING *
-        `,
+            UPDATE star_orders
+            SET status = 'delivered',
+                updated_at = now()
+            WHERE id = $1
+            RETURNING id, status
+          `,
           [id]
         );
 
@@ -123,12 +119,9 @@ export async function POST(req: Request) {
           );
         }
 
-        const order = res.rows[0];
-
         return NextResponse.json({
           ok: true,
-          new_status: order.status,
-          order,
+          new_status: res.rows[0].status
         });
       }
 
@@ -137,7 +130,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     } catch (err) {
-      console.error("admin/orders POST db error:", err);
+      console.error("ADMIN POST error:", err);
       return NextResponse.json(
         { ok: false, error: "DB_ERROR" },
         { status: 500 }
@@ -146,10 +139,10 @@ export async function POST(req: Request) {
       client.release();
     }
   } catch (err) {
-    console.error("admin/orders POST error:", err);
+    console.error("JSON parse error:", err);
     return NextResponse.json(
-      { ok: false, error: "SERVER_ERROR" },
-      { status: 500 }
+      { ok: false, error: "BAD_JSON" },
+      { status: 400 }
     );
   }
 }
