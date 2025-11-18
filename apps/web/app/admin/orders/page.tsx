@@ -14,13 +14,9 @@ type Order = {
   updated_at: string;
 };
 
-type StatusFilter =
-  | 'open'
-  | 'pending'
-  | 'paid'
-  | 'delivered'
-  | 'refunded'
-  | 'all';
+type StatusFilter = 'open' | 'pending' | 'paid' | 'delivered' | 'refunded' | 'all';
+
+const ADMIN_STORAGE_KEY = 'ts_admin_key';
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -29,15 +25,38 @@ export default function AdminOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
-  async function loadOrders(currentFilter: StatusFilter = filter) {
+  const [adminKey, setAdminKey] = useState('');
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  async function loadOrders(currentFilter: StatusFilter = filter, key?: string) {
+    const k = key ?? adminKey;
+    if (!k) {
+      setError('NO_ADMIN_KEY');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(
-        `/api/admin/orders?status=${encodeURIComponent(currentFilter)}`
-      );
+      const res = await fetch(`/api/admin/orders?status=${encodeURIComponent(currentFilter)}`, {
+        headers: {
+          'x-admin-key': k
+        }
+      });
+
       const data = await res.json();
+
+      if (res.status === 401) {
+        // пароль неверный
+        setIsAuthed(false);
+        setAdminKey('');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(ADMIN_STORAGE_KEY);
+        }
+        throw new Error('UNAUTHORIZED');
+      }
 
       if (!res.ok || !data.ok) {
         throw new Error(data?.error || 'LOAD_FAILED');
@@ -52,9 +71,16 @@ export default function AdminOrdersPage() {
     }
   }
 
+  // восстановить пароль из localStorage
   useEffect(() => {
-    // при первом заходе — открытые заказы
-    loadOrders('open');
+    if (typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(ADMIN_STORAGE_KEY);
+    if (saved) {
+      setAdminKey(saved);
+      setIsAuthed(true);
+      // сразу подгрузим открытые заказы
+      loadOrders('open', saved).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -63,26 +89,74 @@ export default function AdminOrdersPage() {
     await loadOrders(next);
   };
 
+  const handleLogin = async () => {
+    if (!adminKey.trim()) return;
+
+    try {
+      setLoginLoading(true);
+      setError(null);
+
+      const res = await fetch('/api/admin/orders?status=open', {
+        headers: {
+          'x-admin-key': adminKey.trim()
+        }
+      });
+
+      const data = await res.json();
+
+      if (res.status === 401 || !data.ok) {
+        throw new Error('UNAUTHORIZED');
+      }
+
+      // успех
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(ADMIN_STORAGE_KEY, adminKey.trim());
+      }
+      setIsAuthed(true);
+      setOrders(data.orders ?? []);
+      setFilter('open');
+    } catch (err: any) {
+      console.error('login error:', err);
+      setError('Неверный админ-пароль');
+      setIsAuthed(false);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
   const markDelivered = async (id: number) => {
+    if (!adminKey) return;
+
     try {
       setActionLoadingId(id);
       setError(null);
 
       const res = await fetch('/api/admin/orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': adminKey
+        },
         body: JSON.stringify({ id, action: 'mark_delivered' })
       });
 
       const data = await res.json();
 
+      if (res.status === 401) {
+        setIsAuthed(false);
+        setAdminKey('');
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(ADMIN_STORAGE_KEY);
+        }
+        throw new Error('UNAUTHORIZED');
+      }
+
       if (!res.ok || !data.ok) {
         throw new Error(data?.error || 'ACTION_FAILED');
       }
 
-      // локально обновим статус
-      setOrders(prev =>
-        prev.map(o =>
+      setOrders((prev) =>
+        prev.map((o) =>
           o.id === id
             ? {
                 ...o,
@@ -100,234 +174,271 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const filters: { key: StatusFilter; label: string }[] = [
-    { key: 'open', label: 'Открытые' },
-    { key: 'pending', label: 'pending' },
-    { key: 'paid', label: 'paid' },
-    { key: 'delivered', label: 'delivered' },
-    { key: 'refunded', label: 'refunded' },
-    { key: 'all', label: 'Все' }
-  ];
+  // ---------- экран логина ----------
+  if (!isAuthed) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'radial-gradient(circle at top,#18253a,#05070b)',
+          color: '#e5edf5',
+          padding: 16
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 420,
+            padding: 24,
+            borderRadius: 18,
+            background: 'rgba(7,12,20,0.96)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            boxShadow: '0 16px 40px rgba(0,0,0,0.6)'
+          }}
+        >
+          <h1 style={{ fontSize: 22, marginBottom: 8 }}>TonStars — вход в админку</h1>
+          <div style={{ opacity: 0.75, marginBottom: 16 }}>
+            Введи админ-пароль, который мы задали в переменной <code>ADMIN_PASSWORD</code>.
+          </div>
 
+          <input
+            type="password"
+            value={adminKey}
+            onChange={(e) => setAdminKey(e.target.value)}
+            placeholder="Админ-пароль"
+            style={{
+              width: '100%',
+              height: 48,
+              borderRadius: 12,
+              border: '1px solid rgba(255,255,255,0.12)',
+              background: '#0c1018',
+              padding: '0 14px',
+              color: '#e6ebff',
+              outline: 'none',
+              marginBottom: 12
+            }}
+          />
+
+          {error && (
+            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 8 }}>{error}</div>
+          )}
+
+          <button
+            onClick={handleLogin}
+            disabled={loginLoading || !adminKey.trim()}
+            style={{
+              width: '100%',
+              height: 48,
+              borderRadius: 14,
+              border: 'none',
+              background:
+                loginLoading || !adminKey.trim()
+                  ? 'rgba(255,255,255,0.06)'
+                  : 'linear-gradient(90deg,#2a86ff,#16e3c9)',
+              color:
+                loginLoading || !adminKey.trim()
+                  ? 'rgba(230,235,255,0.5)'
+                  : '#001014',
+              fontSize: 16,
+              fontWeight: 700,
+              cursor:
+                loginLoading || !adminKey.trim()
+                  ? 'default'
+                  : 'pointer'
+            }}
+          >
+            {loginLoading ? 'Проверяем…' : 'Войти'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- основная админ-страница ----------
   return (
     <div
       style={{
         minHeight: '100vh',
         padding: '24px 16px 40px',
-        maxWidth: 980,
+        maxWidth: 960,
         margin: '0 auto',
-        color: '#e5edf5',
-        background:
-          'radial-gradient(circle at top,#101827 0,#05070c 55%,#020309 100%)'
+        color: '#e5edf5'
       }}
     >
-      <h1 style={{ fontSize: 26, marginBottom: 6 }}>TonStars — Админ / Заказы</h1>
-      <div style={{ opacity: 0.7, marginBottom: 16, maxWidth: 720 }}>
-        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже
-        отправлены пользователю вручную (после этого статус станет
-        <code>delivered</code>).
+      <h1 style={{ fontSize: 26, marginBottom: 8 }}>TonStars — Админ / Заказы</h1>
+      <div style={{ opacity: 0.7, marginBottom: 16 }}>
+        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже отправлены
+        пользователю вручную (после этого статус станет <code>delivered</code>).
       </div>
 
-      {/* панель фильтров / действий */}
+      {/* Фильтр статуса */}
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
           gap: 8,
           marginBottom: 16,
-          alignItems: 'center',
-          justifyContent: 'space-between'
+          alignItems: 'center'
         }}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <span style={{ opacity: 0.8, alignSelf: 'center' }}>Фильтр:</span>
-          {filters.map(f => (
-            <button
-              key={f.key}
-              onClick={() => handleFilterChange(f.key)}
-              style={{
-                padding: '4px 12px',
-                borderRadius: 999,
-                border:
-                  filter === f.key
-                    ? '1px solid rgba(255,255,255,0.8)'
-                    : '1px solid rgba(255,255,255,0.2)',
-                background:
-                  filter === f.key ? 'rgba(0,152,234,0.25)' : 'transparent',
-                color: filter === f.key ? '#ffffff' : '#cbd5f5',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer'
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <span style={{ opacity: 0.8 }}>Фильтр:</span>
+        {(['open', 'pending', 'paid', 'delivered', 'refunded', 'all'] as StatusFilter[]).map(
+          (st) => {
+            const labelMap: Record<StatusFilter, string> = {
+              open: 'Открытые',
+              pending: 'pending',
+              paid: 'paid',
+              delivered: 'delivered',
+              refunded: 'refunded',
+              all: 'Все'
+            };
+            const active = filter === st;
+            return (
+              <button
+                key={st}
+                onClick={() => handleFilterChange(st)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: 999,
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: active ? 'rgba(0,152,234,0.32)' : 'transparent',
+                  color: active ? '#fff' : '#cdd6f4',
+                  fontSize: 14,
+                  cursor: 'pointer'
+                }}
+              >
+                {labelMap[st]}
+              </button>
+            );
+          }
+        )}
 
         <button
           onClick={() => loadOrders(filter)}
           style={{
-            padding: '6px 12px',
+            marginLeft: 'auto',
+            padding: '6px 14px',
             borderRadius: 999,
-            border: '1px solid rgba(255,255,255,0.25)',
-            background: 'rgba(15,23,42,0.9)',
-            color: '#e5edf5',
-            fontSize: 13,
-            cursor: 'pointer'
+            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'transparent',
+            color: '#cdd6f4',
+            fontSize: 14,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
           }}
         >
-          ⟳ Обновить
+          <span style={{ fontSize: 16 }}>↻</span>
+          Обновить
         </button>
       </div>
 
-      {/* статус загрузки / ошибок */}
-      {loading && (
-        <div style={{ marginBottom: 10, fontSize: 14, opacity: 0.8 }}>
-          Загружаем заказы…
-        </div>
-      )}
+      {loading && <div style={{ opacity: 0.7, marginBottom: 8 }}>Загружаем заказы…</div>}
       {error && (
-        <div
-          style={{
-            marginBottom: 10,
-            fontSize: 14,
-            color: '#ff6b6b'
-          }}
-        >
+        <div style={{ color: '#ff6b6b', marginBottom: 8, fontSize: 13 }}>
           Ошибка: {error}
         </div>
       )}
 
-      {/* таблица заказов */}
+      {/* Таблица заказов */}
       <div
         style={{
-          borderRadius: 16,
-          border: '1px solid rgba(148,163,184,0.35)',
-          background:
-            'linear-gradient(145deg,rgba(15,23,42,0.9),rgba(15,23,42,0.98))',
-          overflow: 'hidden'
+          borderRadius: 18,
+          overflow: 'hidden',
+          border: '1px solid rgba(255,255,255,0.08)',
+          background: 'linear-gradient(180deg,#080c12,#05070b)'
         }}
       >
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns:
-              '70px 170px 80px 120px 170px 120px 120px 120px',
-            gap: 0,
-            padding: '8px 10px',
-            fontSize: 12,
+            gridTemplateColumns: '60px 1.5fr 1fr 1.2fr 1.2fr 1fr 1fr',
+            padding: '10px 12px',
+            background: 'linear-gradient(90deg,#111828,#06101e)',
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: 0.3,
             textTransform: 'uppercase',
-            letterSpacing: 0.04,
-            borderBottom: '1px solid rgba(148,163,184,0.4)',
-            background:
-              'linear-gradient(to right,rgba(15,23,42,0.9),rgba(30,64,175,0.9))'
+            opacity: 0.9
           }}
         >
           <div>ID</div>
           <div>Username</div>
           <div>Stars</div>
           <div>TON</div>
-          <div>wallet</div>
           <div>Status</div>
-          <div>Создан</div>
-          <div>Действие</div>
+          <div>Created</div>
+          <div>Actions</div>
         </div>
 
-        {orders.length === 0 && !loading ? (
-          <div
-            style={{
-              padding: 16,
-              fontSize: 14,
-              opacity: 0.8
-            }}
-          >
-            Заказов не найдено для выбранного фильтра.
-          </div>
-        ) : (
-          orders.map(o => {
-            const created = new Date(o.created_at).toLocaleString();
-            const isPaid = o.status === 'paid';
-            const isDelivered = o.status === 'delivered';
+        {orders.map((o) => {
+          const created = new Date(o.created_at).toLocaleString();
+          const tonValue =
+            typeof o.ton_amount === 'string'
+              ? o.ton_amount
+              : String(o.ton_amount ?? '');
 
-            return (
-              <div
-                key={o.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns:
-                    '70px 170px 80px 120px 170px 120px 120px 120px',
-                  gap: 0,
-                  padding: '8px 10px',
-                  fontSize: 13,
-                  borderTop: '1px solid rgba(148,163,184,0.18)'
-                }}
-              >
-                <div style={{ opacity: 0.85 }}>#{o.id}</div>
-                <div style={{ opacity: 0.95 }}>@{o.tg_username}</div>
-                <div style={{ opacity: 0.95 }}>{o.stars}</div>
-                <div style={{ opacity: 0.95 }}>{o.ton_amount}</div>
-                <div
-                  style={{
-                    opacity: 0.8,
-                    fontSize: 12,
-                    wordBreak: 'break-all'
-                  }}
-                >
-                  {o.ton_wallet_addr || '—'}
-                </div>
-                <div>
-                  <span
-                    style={{
-                      padding: '2px 8px',
-                      borderRadius: 999,
-                      fontSize: 11,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.05,
-                      background: isDelivered
-                        ? 'rgba(34,197,94,0.2)'
-                        : isPaid
-                        ? 'rgba(59,130,246,0.25)'
-                        : 'rgba(148,163,184,0.12)',
-                      border: '1px solid rgba(148,163,184,0.45)'
-                    }}
-                  >
-                    {o.status}
-                  </span>
-                </div>
-                <div style={{ opacity: 0.75, fontSize: 12 }}>{created}</div>
-                <div>
+          const canMarkDelivered = o.status === 'paid';
+
+          return (
+            <div
+              key={o.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '60px 1.5fr 1fr 1.2fr 1.2fr 1fr 1fr',
+                padding: '9px 12px',
+                fontSize: 14,
+                borderTop: '1px solid rgba(255,255,255,0.04)',
+                background:
+                  o.status === 'delivered'
+                    ? 'rgba(46, 204, 113, 0.04)'
+                    : 'transparent'
+              }}
+            >
+              <div style={{ opacity: 0.85 }}>#{o.id}</div>
+              <div style={{ opacity: 0.9 }}>@{o.tg_username}</div>
+              <div>{o.stars}</div>
+              <div>{tonValue}</div>
+              <div style={{ textTransform: 'lowercase' }}>{o.status}</div>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>{created}</div>
+              <div>
+                {canMarkDelivered ? (
                   <button
-                    disabled={!isPaid || actionLoadingId === o.id}
                     onClick={() => markDelivered(o.id)}
+                    disabled={actionLoadingId === o.id}
                     style={{
-                      padding: '4px 8px',
+                      padding: '4px 10px',
                       borderRadius: 999,
-                      border: '1px solid rgba(34,197,94,0.5)',
+                      border: '1px solid rgba(46, 204, 113, 0.5)',
                       background:
-                        !isPaid || actionLoadingId === o.id
-                          ? 'rgba(15,23,42,0.7)'
-                          : 'rgba(22,163,74,0.35)',
-                      color:
-                        !isPaid || actionLoadingId === o.id
-                          ? 'rgba(148,163,184,0.7)'
-                          : '#bbf7d0',
-                      fontSize: 11,
+                        actionLoadingId === o.id
+                          ? 'rgba(46, 204, 113, 0.1)'
+                          : 'transparent',
+                      color: '#2ecc71',
+                      fontSize: 12,
                       cursor:
-                        !isPaid || actionLoadingId === o.id
-                          ? 'default'
-                          : 'pointer',
+                        actionLoadingId === o.id ? 'default' : 'pointer',
                       whiteSpace: 'nowrap'
                     }}
                   >
-                    {actionLoadingId === o.id
-                      ? 'Сохраняем…'
-                      : 'Отметить delivered'}
+                    {actionLoadingId === o.id ? 'Сохраняю…' : 'delivered'}
                   </button>
-                </div>
+                ) : (
+                  <span style={{ opacity: 0.5, fontSize: 12 }}>—</span>
+                )}
               </div>
-            );
-          })
+            </div>
+          );
+        })}
+
+        {orders.length === 0 && !loading && (
+          <div style={{ padding: 14, fontSize: 14, opacity: 0.8 }}>
+            Заказов с таким фильтром нет.
+          </div>
         )}
       </div>
     </div>
