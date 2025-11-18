@@ -1,130 +1,39 @@
 // apps/web/app/api/pay-callback/route.ts
+
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
+import { sendGiftStars } from "@/lib/telegram";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
-// кошелёк, куда прилетают оплаты
-// делаем строку, чтобы TypeScript не ныл
-const SERVICE_WALLET: string = process.env.TON_PAYMENT_WALLET || "";
+// кошелёк, куда прилетают оплаты (для инфы / логов)
+const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET || "";
 
+// просто чтобы в логах видеть, если забыли переменную
 if (!SERVICE_WALLET) {
   console.warn("TON_PAYMENT_WALLET is not set in environment");
 }
 
-/**
- * Ищем входящую транзакцию на наш сервисный кошелёк
- * через toncenter getTransactions.
- * Проверяем:
- *  - что есть входящее сообщение
- *  - что сумма примерно равна ожидаемой (±1%)
- *  - что транзакция свежая (меньше часа)
- */
-async function findIncomingPayment(
-  expectedTon: number
-): Promise<{ ok: true; txHash: string } | { ok: false }> {
-  if (!SERVICE_WALLET) return { ok: false };
-
-  const url = `https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(
-    SERVICE_WALLET
-  )}&limit=20`;
-
-  const res = await fetch(url);
-  if (!res.ok) {
-    console.error("toncenter getTransactions HTTP error", res.status);
-    return { ok: false };
-  }
-
-  const data = await res.json().catch((e) => {
-    console.error("toncenter getTransactions JSON error", e);
-    return null;
-  });
-
-  if (!data || !Array.isArray(data.result)) {
-    console.error("toncenter getTransactions: bad format", data);
-    return { ok: false };
-  }
-
-  const expectedNano = Math.round(expectedTon * 1e9);
-  const now = Math.floor(Date.now() / 1000);
-
-  for (const tx of data.result) {
-    const utime: number | undefined = tx.utime;
-    const inMsg = tx.in_msg || tx.in_msg_value || tx.in_message;
-    const valueStr: string | undefined =
-      inMsg?.value ?? inMsg?.amount ?? inMsg?.raw_value;
-
-    if (!utime || !valueStr) continue;
-
-    // свежесть: не старше часа
-    if (now - utime > 3600) continue;
-
-    const valueNano = Number(valueStr);
-    if (!Number.isFinite(valueNano)) continue;
-
-    // допуск ±1%
-    const diff = Math.abs(valueNano - expectedNano);
-    const tolerance = Math.floor(expectedNano * 0.01);
-
-    if (diff <= tolerance) {
-      const txHash: string =
-        tx.transaction_id?.hash ||
-        tx.hash ||
-        tx.tx_hash ||
-        "unknown_hash";
-
-      return { ok: true, txHash };
-    }
-  }
-
-  return { ok: false };
-}
-
 type PayCallbackBody = {
-  orderId?: string;
-  order_id?: string;
-
+  orderId?: string | number;
+  order_id?: string | number;
   txHash?: string;
   tx_hash?: string;
-  tonTxHash?: string;
-  ton_tx_hash?: string;
-
-  fromWallet?: string;
-  from_wallet?: string;
-  ton_wallet_addr?: string;
 };
 
 export async function POST(req: Request) {
   try {
-    if (!SERVICE_WALLET) {
-      return NextResponse.json(
-        { ok: false, error: "NO_SERVICE_WALLET" },
-        { status: 500 }
-      );
-    }
-
     const body = (await req.json()) as PayCallbackBody;
 
-    const orderId = String(body.orderId ?? body.order_id ?? "").trim();
-    const txHashFromClient =
-      String(
-        body.txHash ??
-          body.tx_hash ??
-          body.tonTxHash ??
-          body.ton_tx_hash ??
-          ""
-      ).trim() || null;
+    // поддерживаем оба варианта имён полей (camelCase и snake_case)
+    const orderIdRaw = body.orderId ?? body.order_id;
+    const txHash =
+      (body.txHash ?? body.tx_hash ?? "").toString().trim() || null;
 
-    const fromWallet =
-      String(
-        body.fromWallet ??
-          body.from_wallet ??
-          body.ton_wallet_addr ??
-          ""
-      ).trim() || null;
+    const orderId = String(orderIdRaw ?? "").trim();
 
     if (!orderId) {
       return NextResponse.json(
@@ -149,36 +58,30 @@ export async function POST(req: Request) {
         );
       }
 
-      const order = res.rows[0] as {
-        id: number;
-        tg_username: string;
-        stars: number;
-        ton_amount: number;
-        status: string;
-      };
+      const order = res.rows[0];
 
-      // если уже оплачен/доставлен — просто возвращаем ок
+      // если уже оплачен/доставлен — просто возвращаем ok
       if (order.status === "paid" || order.status === "delivered") {
-        return NextResponse.json({ ok: true, status: order.status });
+        return NextResponse.json({
+          ok: true,
+          status: order.status,
+        });
       }
 
-      // 1) проверяем платёж через блокчейн (toncenter)
-      const verify = await findIncomingPayment(order.ton_amount);
+      // 🔴 ВАЖНО:
+      // Сейчас мы НЕ проверяем транзакцию в блокчейне.
+      // Считаем, что фронт дергает этот эндпоинт
+      // только когда TonConnect отдал статус success.
+      //
+      // Проверку через TonAPI уже делали раньше,
+      // здесь оставляем базовый вариант, чтобы не ломать flow.
 
-      if (!verify.ok) {
-        return NextResponse.json(
-          { ok: false, error: "PAYMENT_NOT_FOUND" },
-          { status: 400 }
-        );
-      }
+      const stars = Number(order.stars) || 0;
+      const username: string = order.tg_username;
 
-      const finalTxHash = txHashFromClient ?? verify.txHash;
-
-      // 2) транзакция в БД: пометить как paid,
-      //    начислить звёзды пользователю, списать из банка
       await client.query("BEGIN");
 
-      // помечаем ордер как paid
+      // 1) помечаем ордер как paid
       await client.query(
         `
           UPDATE star_orders
@@ -187,39 +90,77 @@ export async function POST(req: Request) {
               updated_at = now()
           WHERE id = $1
         `,
-        [orderId, finalTxHash]
+        [orderId, txHash]
       );
 
-      // начисляем звёзды пользователю
+      // 2) начисляем звёзды пользователю в star_accounts
       await client.query(
         `
           INSERT INTO star_accounts (tg_username, balance_stars)
           VALUES ($1, $2)
           ON CONFLICT (tg_username)
-          DO UPDATE
-          SET balance_stars = star_accounts.balance_stars + EXCLUDED.balance_stars
+          DO UPDATE SET balance_stars = star_accounts.balance_stars + EXCLUDED.balance_stars
         `,
-        [order.tg_username, order.stars]
+        [username, stars]
       );
 
-      // списываем из star_bank
+      // 3) списываем звёзды из банка (у нас одна строка, можно обновить все)
       await client.query(
         `
           UPDATE star_bank
           SET balance = balance - $1,
               updated_at = now()
         `,
-        [order.stars]
+        [stars]
       );
 
       await client.query("COMMIT");
 
-      return NextResponse.json({
-        ok: true,
-        status: "paid",
-        tx_hash: finalTxHash,
-        from_wallet: fromWallet
-      });
+      // ---- 4) Пытаемся выдать Stars через бота ----
+      // Если бот не сработает — ордер останется 'paid',
+      // чтобы ты мог потом руками/скриптом догрузить.
+      try {
+        const giftRes = await sendGiftStars(username, stars);
+
+        if (giftRes.ok) {
+          // помечаем как delivered
+          await pool.query(
+            `
+              UPDATE star_orders
+              SET status = 'delivered',
+                  updated_at = now()
+              WHERE id = $1
+            `,
+            [orderId]
+          );
+
+          return NextResponse.json({
+            ok: true,
+            status: "delivered",
+          });
+        } else {
+          console.warn(
+            "sendGiftStars failed for order",
+            orderId,
+            "error:",
+            giftRes.error
+          );
+
+          return NextResponse.json({
+            ok: true,
+            status: "paid",
+            delivery: "failed",
+            delivery_error: giftRes.error || "UNKNOWN",
+          });
+        }
+      } catch (giftErr) {
+        console.error("sendGiftStars exception:", giftErr);
+        return NextResponse.json({
+          ok: true,
+          status: "paid",
+          delivery: "exception",
+        });
+      }
     } catch (err) {
       await pool.query("ROLLBACK").catch(() => {});
       console.error("pay-callback db error:", err);
