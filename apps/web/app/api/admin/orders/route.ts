@@ -20,7 +20,7 @@ function checkAdmin(req: Request): boolean {
   const hdr = req.headers.get("x-admin-token");
   if (hdr && hdr === adminKey) return true;
 
-  // 2) Проверяем ?key=...
+  // 2) Проверяем query-параметр: ?key=...
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
   if (key && key === adminKey) return true;
@@ -29,7 +29,7 @@ function checkAdmin(req: Request): boolean {
 }
 
 // =========================================================
-// GET  — либо список заказов, либо статистика (?mode=stats)
+// GET  — получить список заказов
 // =========================================================
 export async function GET(req: Request) {
   if (!checkAdmin(req)) {
@@ -40,45 +40,10 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const mode = url.searchParams.get("mode") || "list";
+  const status = url.searchParams.get("status") || "open";
 
   const client = await pool.connect();
-
   try {
-    if (mode === "stats") {
-      // простая агрегированная статистика
-      const res = await client.query(
-        `
-        SELECT
-          COALESCE(SUM(stars), 0)                    AS total_stars,
-          COALESCE(SUM(ton_amount), 0)              AS total_ton,
-          COUNT(*)                                  AS total_orders,
-          SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END)       AS paid_orders,
-          SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END)  AS delivered_orders,
-          SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END)   AS refunded_orders
-        FROM star_orders
-        WHERE status IN ('paid','delivered','refunded')
-        `
-      );
-
-      const row = res.rows[0] || {};
-
-      return NextResponse.json({
-        ok: true,
-        stats: {
-          total_stars: Number(row.total_stars || 0),
-          total_ton: Number(row.total_ton || 0),
-          total_orders: Number(row.total_orders || 0),
-          paid_orders: Number(row.paid_orders || 0),
-          delivered_orders: Number(row.delivered_orders || 0),
-          refunded_orders: Number(row.refunded_orders || 0)
-        }
-      });
-    }
-
-    // режим "list" — обычный список заказов
-    const status = url.searchParams.get("status") || "open";
-
     let query = `
       SELECT *
       FROM star_orders
@@ -111,7 +76,8 @@ export async function GET(req: Request) {
 }
 
 // =========================================================
-// POST — действия над заказом: mark_delivered / refund
+// POST — действия над заказом
+//   "mark_delivered" / "mark_refunded"
 // =========================================================
 export async function POST(req: Request) {
   if (!checkAdmin(req)) {
@@ -134,16 +100,15 @@ export async function POST(req: Request) {
     }
 
     const client = await pool.connect();
-
     try {
       if (action === "mark_delivered") {
         const res = await client.query(
           `
-          UPDATE star_orders
-          SET status = 'delivered',
-              updated_at = now()
-          WHERE id = $1
-          RETURNING id, status
+            UPDATE star_orders
+            SET status = 'delivered',
+                updated_at = now()
+            WHERE id = $1
+            RETURNING id, status
           `,
           [id]
         );
@@ -161,16 +126,14 @@ export async function POST(req: Request) {
         });
       }
 
-      if (action === "refund") {
-        // ВАЖНО: здесь мы только помечаем заказ как refunded.
-        // Сам возврат TON ты делаешь руками из кошелька.
+      if (action === "mark_refunded") {
         const res = await client.query(
           `
-          UPDATE star_orders
-          SET status = 'refunded',
-              updated_at = now()
-          WHERE id = $1
-          RETURNING id, status
+            UPDATE star_orders
+            SET status = 'refunded',
+                updated_at = now()
+            WHERE id = $1
+            RETURNING id, status
           `,
           [id]
         );
