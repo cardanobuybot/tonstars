@@ -2,64 +2,94 @@
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-if (!BOT_TOKEN) {
-  console.warn("TELEGRAM_BOT_TOKEN is not set");
-}
+// Базовый URL к Telegram Bot API
+const API_URL = BOT_TOKEN
+  ? `https://api.telegram.org/bot${BOT_TOKEN}`
+  : '';
 
-const API_URL = `https://api.telegram.org/bot${BOT_TOKEN}`;
+type TgGetChatResponse = {
+  ok: boolean;
+  result?: {
+    id: number;
+    username?: string;
+    [key: string]: any;
+  };
+  description?: string;
+};
 
 /**
- * Отправка обычного текстового сообщения
+ * Превращаем @username в числовой user_id через getChat.
+ * Это нужно, чтобы позже реально отправлять Stars.
  */
-export async function sendTelegramMessage(to: string, text: string) {
-  if (!BOT_TOKEN) {
-    console.warn("NO TOKEN, cannot send telegram message");
-    return { ok: false, error: "NO_TOKEN" };
+export async function resolveUserId(username: string): Promise<{
+  ok: boolean;
+  userId?: number;
+  error?: string;
+}> {
+  if (!BOT_TOKEN || !API_URL) {
+    console.warn('TELEGRAM_BOT_TOKEN is not set, cannot resolve user id');
+    return { ok: false, error: 'NO_BOT_TOKEN' };
   }
 
   try {
-    const res = await fetch(`${API_URL}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: to,       // username или chat_id
-        text,
-        parse_mode: "HTML"
-      }),
-    });
+    const uname = username.startsWith('@') ? username : `@${username}`;
+    const url = `${API_URL}/getChat?chat_id=${encodeURIComponent(uname)}`;
 
-    const data = await res.json();
+    const resp = await fetch(url);
+    const data = (await resp.json()) as TgGetChatResponse;
 
-    if (!data.ok) {
-      console.error("Telegram API error:", data);
-      return { ok: false, error: data.description };
+    if (!data.ok || !data.result?.id) {
+      console.warn('resolveUserId failed:', data.description || 'NO_RESULT');
+      return {
+        ok: false,
+        error: data.description || 'TG_GETCHAT_FAILED',
+      };
     }
 
-    return { ok: true };
-  } catch (err: any) {
-    console.error("sendTelegramMessage error:", err);
-    return { ok: false, error: err.message };
+    return { ok: true, userId: data.result.id };
+  } catch (err) {
+    console.error('resolveUserId error:', err);
+    return { ok: false, error: 'TG_ERROR' };
   }
 }
 
 /**
- * Заглушка под выдачу Stars.
- * Позже поставим реальный sendGiftStars
+ * Заглушка под будущую выдачу Stars.
+ *
+ * Сейчас:
+ *  - резолвит user_id по username
+ *  - логирует намерение отправить Stars
+ *  - НЕ вызывает реальный sendGiftStars (он пока не задокументирован стабильно)
+ *
+ * Позже сюда добавим реальный запрос к Telegram Bot API.
  */
-export async function sendGiftStars(username: string, stars: number) {
-  if (!BOT_TOKEN) {
-    console.warn("TELEGRAM_BOT_TOKEN is not set, cannot send stars");
-    return { ok: false as const, error: "NO_BOT_TOKEN" as const };
+export async function sendGiftStars(username: string, stars: number): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
+  if (!BOT_TOKEN || !API_URL) {
+    console.warn('TELEGRAM_BOT_TOKEN is not set, cannot send stars');
+    return { ok: false, error: 'NO_BOT_TOKEN' };
   }
 
-  try {
-    console.log("sendGiftStars STUB called", { username, stars });
-
-    // TODO: реальный метод sendGiftStars здесь
-
-    return { ok: true as const };
-  } catch (err) {
-    console.error("sendGiftStars error:", err);
-    return { ok: false as const, error: "TG_ERROR" as const };
+  // 1. Резолвим user_id
+  const res = await resolveUserId(username);
+  if (!res.ok || !res.userId) {
+    console.warn('sendGiftStars: cannot resolve user id', res.error);
+    return { ok: false, error: res.error || 'USER_RESOLVE_FAILED' };
   }
+
+  const userId = res.userId;
+
+  // 2. Пока только логируем — реальный sendGiftStars добавим позже
+  console.log('sendGiftStars STUB => would send', {
+    to: username,
+    userId,
+    stars,
+  });
+
+  // Здесь позже будет реальный запрос типа:
+  // await fetch(`${API_URL}/sendGiftStars`, { method: 'POST', body: ... })
+
+  return { ok: true };
 }
