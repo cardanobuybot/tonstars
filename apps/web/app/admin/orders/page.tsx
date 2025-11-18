@@ -49,7 +49,6 @@ export default function AdminOrdersPage() {
       const data = await res.json();
 
       if (res.status === 401) {
-        // пароль неверный
         setIsAuthed(false);
         setAdminKey('');
         if (typeof window !== 'undefined') {
@@ -78,7 +77,6 @@ export default function AdminOrdersPage() {
     if (saved) {
       setAdminKey(saved);
       setIsAuthed(true);
-      // сразу подгрузим открытые заказы
       loadOrders('open', saved).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,7 +106,6 @@ export default function AdminOrdersPage() {
         throw new Error('UNAUTHORIZED');
       }
 
-      // успех
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(ADMIN_STORAGE_KEY, adminKey.trim());
       }
@@ -344,102 +341,106 @@ export default function AdminOrdersPage() {
         </div>
       )}
 
-      {/* Таблица заказов */}
+      {/* Таблица заказов + горизонтальный скролл */}
       <div
         style={{
           borderRadius: 18,
-          overflow: 'hidden',
           border: '1px solid rgba(255,255,255,0.08)',
-          background: 'linear-gradient(180deg,#080c12,#05070b)'
+          background: 'linear-gradient(180deg,#080c12,#05070b)',
+          overflowX: 'auto'
         }}
       >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '60px 1.5fr 1fr 1.2fr 1.2fr 1fr 1fr',
-            padding: '10px 12px',
-            background: 'linear-gradient(90deg,#111828,#06101e)',
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0.3,
-            textTransform: 'uppercase',
-            opacity: 0.9
-          }}
-        >
-          <div>ID</div>
-          <div>Username</div>
-          <div>Stars</div>
-          <div>TON</div>
-          <div>Status</div>
-          <div>Created</div>
-          <div>Actions</div>
-        </div>
+        <div style={{ minWidth: 720 }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1fr',
+              padding: '10px 12px',
+              background: 'linear-gradient(90deg,#111828,#06101e)',
+              fontSize: 12,
+              fontWeight: 600,
+              letterSpacing: 0.3,
+              textTransform: 'uppercase',
+              opacity: 0.9
+            }}
+          >
+            <div>ID</div>
+            <div>Username</div>
+            <div style={{ textAlign: 'right' }}>Stars</div>
+            <div style={{ textAlign: 'right' }}>TON</div>
+            <div>Status</div>
+            <div>Created</div>
+            <div style={{ textAlign: 'center' }}>Actions</div>
+          </div>
 
-        {orders.map((o) => {
-          const created = new Date(o.created_at).toLocaleString();
-          const tonValue =
-            typeof o.ton_amount === 'string'
-              ? o.ton_amount
+          {orders.map((o) => {
+            const created = new Date(o.created_at).toLocaleString();
+            const tonNum = Number(o.ton_amount);
+            const tonFormatted = Number.isFinite(tonNum)
+              ? tonNum.toFixed(4)
               : String(o.ton_amount ?? '');
 
-          const canMarkDelivered = o.status === 'paid';
+            const canMarkDelivered = o.status === 'paid';
 
-          return (
-            <div
-              key={o.id}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '60px 1.5fr 1fr 1.2fr 1.2fr 1fr 1fr',
-                padding: '9px 12px',
-                fontSize: 14,
-                borderTop: '1px solid rgba(255,255,255,0.04)',
-                background:
-                  o.status === 'delivered'
-                    ? 'rgba(46, 204, 113, 0.04)'
-                    : 'transparent'
-              }}
-            >
-              <div style={{ opacity: 0.85 }}>#{o.id}</div>
-              <div style={{ opacity: 0.9 }}>@{o.tg_username}</div>
-              <div>{o.stars}</div>
-              <div>{tonValue}</div>
-              <div style={{ textTransform: 'lowercase' }}>{o.status}</div>
-              <div style={{ fontSize: 12, opacity: 0.8 }}>{created}</div>
-              <div>
-                {canMarkDelivered ? (
-                  <button
-                    onClick={() => markDelivered(o.id)}
-                    disabled={actionLoadingId === o.id}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 999,
-                      border: '1px solid rgba(46, 204, 113, 0.5)',
-                      background:
-                        actionLoadingId === o.id
-                          ? 'rgba(46, 204, 113, 0.1)'
-                          : 'transparent',
-                      color: '#2ecc71',
-                      fontSize: 12,
-                      cursor:
-                        actionLoadingId === o.id ? 'default' : 'pointer',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {actionLoadingId === o.id ? 'Сохраняю…' : 'delivered'}
-                  </button>
-                ) : (
-                  <span style={{ opacity: 0.5, fontSize: 12 }}>—</span>
-                )}
+            return (
+              <div
+                key={o.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1fr',
+                  padding: '9px 12px',
+                  fontSize: 14,
+                  borderTop: '1px solid rgba(255,255,255,0.04)',
+                  background:
+                    o.status === 'delivered'
+                      ? 'rgba(46, 204, 113, 0.04)'
+                      : 'transparent'
+                }}
+              >
+                <div style={{ opacity: 0.85 }}>#{o.id}</div>
+                <div style={{ opacity: 0.9 }}>@{o.tg_username}</div>
+                <div style={{ textAlign: 'right' }}>{o.stars}</div>
+                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                  {tonFormatted}
+                </div>
+                <div style={{ textTransform: 'lowercase' }}>{o.status}</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>{created}</div>
+                <div style={{ textAlign: 'center' }}>
+                  {canMarkDelivered ? (
+                    <button
+                      onClick={() => markDelivered(o.id)}
+                      disabled={actionLoadingId === o.id}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        border: '1px solid rgba(46, 204, 113, 0.5)',
+                        background:
+                          actionLoadingId === o.id
+                            ? 'rgba(46, 204, 113, 0.1)'
+                            : 'transparent',
+                        color: '#2ecc71',
+                        fontSize: 12,
+                        cursor:
+                          actionLoadingId === o.id ? 'default' : 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {actionLoadingId === o.id ? 'Сохраняю…' : 'delivered'}
+                    </button>
+                  ) : (
+                    <span style={{ opacity: 0.5, fontSize: 12 }}>—</span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
-        {orders.length === 0 && !loading && (
-          <div style={{ padding: 14, fontSize: 14, opacity: 0.8 }}>
-            Заказов с таким фильтром нет.
-          </div>
-        )}
+          {orders.length === 0 && !loading && (
+            <div style={{ padding: 14, fontSize: 14, opacity: 0.8 }}>
+              Заказов с таким фильтром нет.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
