@@ -7,7 +7,8 @@ import {
   useTonWallet
 } from '@tonconnect/ui-react';
 
-// временный курс
+// курс: сколько TON за 1 звезду
+// меняешь только это число, если захочешь другой курс
 const STAR_TON_RATE = 0.0002;
 
 // готовые пакеты звёзд, как на Fragment
@@ -19,8 +20,8 @@ const texts = {
     sub: 'Быстро. Без KYC. Прозрачно.',
     buyCardTitle: 'Купить Stars',
     usernameLabel: 'Telegram юзернейм пользователя:',
-    usernamePh: 'username без @',
-    usernameHint: 'Введите ник без @.',
+    usernamePh: 'username (можно с @ или без)',
+    usernameHint: 'Можно вводить ник с @ или без — мы обработаем сами.',
     amountLabel: 'Количество Stars:',
     usernameErr: 'Ник: латиница/цифры/_ (5–32)',
     amountErr: 'Минимум 50 звёзд',
@@ -44,8 +45,8 @@ const texts = {
     sub: 'Fast. No KYC. Transparent.',
     buyCardTitle: 'Buy Stars',
     usernameLabel: 'Telegram username:',
-    usernamePh: 'username without @',
-    usernameHint: 'Enter nickname without @.',
+    usernamePh: 'username (with or without @)',
+    usernameHint: 'You can enter it with @ or without — we handle both.',
     amountLabel: 'Stars amount:',
     usernameErr: 'Username: latin/digits/_ (5–32)',
     amountErr: 'Minimum is 50 stars',
@@ -93,7 +94,7 @@ export default function Page() {
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
-  // валидация юзернейма
+  // валидация юзернейма (отрезаем @ перед проверкой)
   const userOk = useMemo(
     () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '').trim()),
     [username]
@@ -103,6 +104,7 @@ export default function Page() {
   const amountNum = selectedPack;
   const amtOk = amountNum >= 50;
 
+  // считаем сумму в TON
   const amountTon = useMemo(
     () => Number((amountNum * STAR_TON_RATE).toFixed(4)),
     [amountNum]
@@ -236,10 +238,23 @@ export default function Page() {
   return (
     <div className="container safe-bottom" style={{ padding: '32px 16px 28px' }}>
       {/* HEADER */}
-      <div data-hdr style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div data-hdr-left style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div
+        data-hdr
+        style={{
+          marginBottom: 12,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}
+      >
+        <div
+          data-hdr-left
+          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+        >
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
+          <div
+            style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}
+          >
             TonStars
           </div>
         </div>
@@ -263,7 +278,9 @@ export default function Page() {
       >
         {t.hero}
       </h1>
-      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>
+      <div
+        style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}
+      >
         {t.sub}
       </div>
 
@@ -296,7 +313,7 @@ export default function Page() {
           spellCheck={false}
           placeholder={t.usernamePh}
           value={username}
-          onChange={(e) => setUsername(e.target.value.trim())}
+          onChange={(e) => setUsername(e.target.value)}
           className={
             username ? (userOk ? 'input-ok' : 'input-err') : undefined
           }
@@ -394,7 +411,11 @@ export default function Page() {
           }}
         >
           <div>{t.balance}</div>
-          <div>{balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}</div>
+          <div>
+            {balanceTon == null
+              ? '— TON'
+              : `${balanceTon.toFixed(4)} TON`}
+          </div>
         </div>
 
         {/* статус процесса */}
