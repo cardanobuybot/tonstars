@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     const rawUsername = String(body.username || "").trim();
     const stars = Number(body.stars);
 
-    if (!rawUsername || !/^[a-z0-9_]{5,32}$/i.test(rawUsername.replace(/^@/, ""))) {
+    if (!rawUsername || !/^[a-z0-9_]{4,32}$/i.test(rawUsername.replace(/^@/, ""))) {
       return NextResponse.json({ ok: false, error: "BAD_USERNAME" }, { status: 400 });
     }
 
