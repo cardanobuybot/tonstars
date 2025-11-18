@@ -29,6 +29,7 @@ export default function AdminOrdersPage() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
 
+  // ---------- загрузка заказов ----------
   async function loadOrders(currentFilter: StatusFilter = filter, key?: string) {
     const k = key ?? adminKey;
     if (!k) {
@@ -40,11 +41,14 @@ export default function AdminOrdersPage() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`/api/admin/orders?status=${encodeURIComponent(currentFilter)}`, {
-        headers: {
-          'x-admin-key': k
+      const res = await fetch(
+        `/api/admin/orders?status=${encodeURIComponent(currentFilter)}`,
+        {
+          headers: {
+            'x-admin-key': k
+          }
         }
-      });
+      );
 
       const data = await res.json();
 
@@ -52,7 +56,7 @@ export default function AdminOrdersPage() {
         setIsAuthed(false);
         setAdminKey('');
         if (typeof window !== 'undefined') {
-          localStorage.removeItem(ADMIN_STORAGE_KEY);
+          window.localStorage.removeItem(ADMIN_STORAGE_KEY);
         }
         throw new Error('UNAUTHORIZED');
       }
@@ -70,7 +74,7 @@ export default function AdminOrdersPage() {
     }
   }
 
-  // восстановить пароль из localStorage
+  // ---------- восстановить пароль из localStorage ----------
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const saved = window.localStorage.getItem(ADMIN_STORAGE_KEY);
@@ -87,6 +91,7 @@ export default function AdminOrdersPage() {
     await loadOrders(next);
   };
 
+  // ---------- логин ----------
   const handleLogin = async () => {
     if (!adminKey.trim()) return;
 
@@ -121,6 +126,7 @@ export default function AdminOrdersPage() {
     }
   };
 
+  // ---------- отметить delivered ----------
   const markDelivered = async (id: number) => {
     if (!adminKey) return;
 
@@ -143,7 +149,7 @@ export default function AdminOrdersPage() {
         setIsAuthed(false);
         setAdminKey('');
         if (typeof window !== 'undefined') {
-          localStorage.removeItem(ADMIN_STORAGE_KEY);
+          window.localStorage.removeItem(ADMIN_STORAGE_KEY);
         }
         throw new Error('UNAUTHORIZED');
       }
@@ -196,9 +202,12 @@ export default function AdminOrdersPage() {
             boxShadow: '0 16px 40px rgba(0,0,0,0.6)'
           }}
         >
-          <h1 style={{ fontSize: 22, marginBottom: 8 }}>TonStars — вход в админку</h1>
+          <h1 style={{ fontSize: 22, marginBottom: 8 }}>
+            TonStars — вход в админку
+          </h1>
           <div style={{ opacity: 0.75, marginBottom: 16 }}>
-            Введи админ-пароль, который мы задали в переменной <code>ADMIN_PASSWORD</code>.
+            Введи админ-пароль, который мы задали в переменной{' '}
+            <code>ADMIN_PASSWORD</code>.
           </div>
 
           <input
@@ -220,7 +229,9 @@ export default function AdminOrdersPage() {
           />
 
           {error && (
-            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 8 }}>{error}</div>
+            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 8 }}>
+              {error}
+            </div>
           )}
 
           <button
@@ -265,10 +276,13 @@ export default function AdminOrdersPage() {
         color: '#e5edf5'
       }}
     >
-      <h1 style={{ fontSize: 26, marginBottom: 8 }}>TonStars — Админ / Заказы</h1>
+      <h1 style={{ fontSize: 26, marginBottom: 8 }}>
+        TonStars — Админ / Заказы
+      </h1>
       <div style={{ opacity: 0.7, marginBottom: 16 }}>
-        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже отправлены
-        пользователю вручную (после этого статус станет <code>delivered</code>).
+        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже
+        отправлены пользователю вручную (после этого статус станет{' '}
+        <code>delivered</code>).
       </div>
 
       {/* Фильтр статуса */}
@@ -282,6 +296,7 @@ export default function AdminOrdersPage() {
         }}
       >
         <span style={{ opacity: 0.8 }}>Фильтр:</span>
+
         {(['open', 'pending', 'paid', 'delivered', 'refunded', 'all'] as StatusFilter[]).map(
           (st) => {
             const labelMap: Record<StatusFilter, string> = {
@@ -334,7 +349,9 @@ export default function AdminOrdersPage() {
         </button>
       </div>
 
-      {loading && <div style={{ opacity: 0.7, marginBottom: 8 }}>Загружаем заказы…</div>}
+      {loading && (
+        <div style={{ opacity: 0.7, marginBottom: 8 }}>Загружаем заказы…</div>
+      )}
       {error && (
         <div style={{ color: '#ff6b6b', marginBottom: 8, fontSize: 13 }}>
           Ошибка: {error}
@@ -400,7 +417,12 @@ export default function AdminOrdersPage() {
                 <div style={{ opacity: 0.85 }}>#{o.id}</div>
                 <div style={{ opacity: 0.9 }}>@{o.tg_username}</div>
                 <div style={{ textAlign: 'right' }}>{o.stars}</div>
-                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                <div
+                  style={{
+                    textAlign: 'right',
+                    fontVariantNumeric: 'tabular-nums'
+                  }}
+                >
                   {tonFormatted}
                 </div>
                 <div style={{ textTransform: 'lowercase' }}>{o.status}</div>
