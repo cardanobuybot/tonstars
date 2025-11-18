@@ -16,10 +16,10 @@ const texts = {
     sub: 'Быстро. Без KYC. Прозрачно.',
     buyCardTitle: 'Купить Stars',
     usernameLabel: 'Telegram юзернейм пользователя:',
-    usernamePh: 'username без @',
-    usernameHint: 'Введите ник без @.',
+    usernamePh: '@username',
+    usernameHint: 'Можно вводить с @ или без. Латиница/цифры/_.',
     amountLabel: 'Количество Stars:',
-    usernameErr: 'Ник: латиница/цифры/_ (5–32)',
+    usernameErr: 'Ник: латиница/цифры/_ (4–32 символа)',
     amountErr: 'Введите целое число ≥ 1',
     toPay: 'К оплате (TON)',
     balance: 'Баланс (TON)',
@@ -41,10 +41,10 @@ const texts = {
     sub: 'Fast. No KYC. Transparent.',
     buyCardTitle: 'Buy Stars',
     usernameLabel: 'Telegram username:',
-    usernamePh: 'username without @',
-    usernameHint: 'Enter nickname without @.',
+    usernamePh: '@username',
+    usernameHint: 'You can type with or without @. Latin letters/digits/_.',
     amountLabel: 'Stars amount:',
-    usernameErr: 'Username: latin/digits/_ (5–32)',
+    usernameErr: 'Username: latin/digits/_ (4–32 chars)',
     amountErr: 'Enter an integer ≥ 1',
     toPay: 'To pay (TON)',
     balance: 'Balance (TON)',
@@ -90,10 +90,16 @@ export default function Page() {
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
-  // валидации
-  const userOk = useMemo(
-    () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '').trim()),
+  // очищенный ник: убираем пробелы и @
+  const cleanUsername = useMemo(
+    () => username.trim().replace(/^@/, ''),
     [username]
+  );
+
+  // валидации ника — 4–32 символа
+  const userOk = useMemo(
+    () => /^[a-z0-9_]{4,32}$/i.test(cleanUsername),
+    [cleanUsername]
   );
 
   const amountNum = useMemo(() => {
@@ -155,12 +161,12 @@ export default function Page() {
       setStatus('creating');
       setErrorDetails(null);
 
-      // 1) создаём ордер на бэке
+      // 1) создаём ордер на бэке — отправляем уже очищенный ник
       const createRes = await fetch('/api/order/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username,
+          username: cleanUsername,
           stars: amountNum
         })
       });
@@ -218,7 +224,6 @@ export default function Page() {
       if (cbData.status === 'paid' || cbData.status === 'delivered') {
         setStatus('paid');
       } else {
-        // на всякий случай — если статус какой-то другой
         setStatus('waiting_confirm');
       }
     } catch (err: any) {
@@ -270,11 +275,12 @@ export default function Page() {
       {/* CARD */}
       <div
         style={{
-          background: 'linear-gradient(180deg,#0c0f14,#0b0e13)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: 18,
-          boxShadow: '0 6px 28px rgba(0,0,0,0.45)',
-          padding: 18,
+          // сделал карточку светлее и чуть контрастнее фона
+          background: 'linear-gradient(180deg,#171c25,#10141c)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 20,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+          padding: 20,
           maxWidth: 840,
           margin: '0 auto'
         }}
@@ -296,7 +302,7 @@ export default function Page() {
           spellCheck={false}
           placeholder={t.usernamePh}
           value={username}
-          onChange={(e) => setUsername(e.target.value.trim())}
+          onChange={(e) => setUsername(e.target.value)}
           className={
             username ? (userOk ? 'input-ok' : 'input-err') : undefined
           }
@@ -304,8 +310,8 @@ export default function Page() {
             width: '100%',
             height: 52,
             borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.1)',
-            background: '#0c1016',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: '#111722',
             padding: '0 14px',
             color: '#e6ebff',
             outline: 'none'
@@ -339,8 +345,8 @@ export default function Page() {
             width: '100%',
             height: 52,
             borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.1)',
-            background: '#0c1016',
+            border: '1px solid rgba(255,255,255,0.12)',
+            background: '#111722',
             padding: '0 14px',
             color: '#e6ebff',
             outline: 'none'
@@ -394,13 +400,11 @@ export default function Page() {
                 ? '#ff6b6b'
                 : isSuccess
                 ? '#4cd964'
-                : 'rgba(255,255,255,0.8)'
+                : 'rgba(255,255,255,0.85)'
             }}
           >
             {statusText}
-            {isError && errorDetails
-              ? ` (${errorDetails})`
-              : null}
+            {isError && errorDetails ? ` (${errorDetails})` : null}
           </div>
         )}
 
@@ -416,11 +420,11 @@ export default function Page() {
             background:
               canBuy && status !== 'creating' && status !== 'opening_wallet'
                 ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
-                : 'rgba(255,255,255,0.06)',
+                : 'rgba(255,255,255,0.08)',
             color:
               canBuy && status !== 'creating' && status !== 'opening_wallet'
                 ? '#001014'
-                : 'rgba(230,235,255,0.5)',
+                : 'rgba(230,235,255,0.6)',
             fontSize: 18,
             fontWeight: 800,
             cursor:
@@ -506,3 +510,4 @@ export default function Page() {
     </div>
   );
 }
+```0
