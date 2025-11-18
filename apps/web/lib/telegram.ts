@@ -2,94 +2,96 @@
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// Базовый URL к Telegram Bot API
+if (!BOT_TOKEN) {
+  console.warn("TELEGRAM_BOT_TOKEN is not set – Telegram features disabled");
+}
+
 const API_URL = BOT_TOKEN
   ? `https://api.telegram.org/bot${BOT_TOKEN}`
-  : '';
-
-type TgGetChatResponse = {
-  ok: boolean;
-  result?: {
-    id: number;
-    username?: string;
-    [key: string]: any;
-  };
-  description?: string;
-};
+  : "";
 
 /**
- * Превращаем @username в числовой user_id через getChat.
- * Это нужно, чтобы позже реально отправлять Stars.
+ * Отправка обычного текстового сообщения (для отладки).
  */
-export async function resolveUserId(username: string): Promise<{
-  ok: boolean;
-  userId?: number;
-  error?: string;
-}> {
+export async function sendTelegramMessage(to: string, text: string) {
   if (!BOT_TOKEN || !API_URL) {
-    console.warn('TELEGRAM_BOT_TOKEN is not set, cannot resolve user id');
-    return { ok: false, error: 'NO_BOT_TOKEN' };
+    console.warn("NO TOKEN, cannot send telegram message");
+    return { ok: false as const, error: "NO_TOKEN" as const };
   }
 
   try {
-    const uname = username.startsWith('@') ? username : `@${username}`;
-    const url = `${API_URL}/getChat?chat_id=${encodeURIComponent(uname)}`;
+    const res = await fetch(`${API_URL}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: to, // username с @ или numeric chat_id
+        text,
+      }),
+    });
 
-    const resp = await fetch(url);
-    const data = (await resp.json()) as TgGetChatResponse;
+    const data = await res.json();
 
-    if (!data.ok || !data.result?.id) {
-      console.warn('resolveUserId failed:', data.description || 'NO_RESULT');
-      return {
-        ok: false,
-        error: data.description || 'TG_GETCHAT_FAILED',
-      };
+    if (!res.ok || !data.ok) {
+      console.error("sendTelegramMessage TG error:", data);
+      return { ok: false as const, error: "TG_API_ERROR" as const, data };
     }
 
-    return { ok: true, userId: data.result.id };
+    return { ok: true as const, data };
   } catch (err) {
-    console.error('resolveUserId error:', err);
-    return { ok: false, error: 'TG_ERROR' };
+    console.error("sendTelegramMessage error:", err);
+    return { ok: false as const, error: "TG_REQUEST_ERROR" as const };
   }
 }
 
 /**
- * Заглушка под будущую выдачу Stars.
+ * ПОДГОТОВКА под реальную выдачу Stars ботом.
+ *
+ * ⚠️ ВАЖНО:
+ * - Здесь мы делаем «честный» запрос на метод sendGiftStars в Bot API.
+ * - Точный набор параметров может отличаться — смотри актуальную доку Telegram
+ *   и при необходимости поправь payload.
  *
  * Сейчас:
- *  - резолвит user_id по username
- *  - логирует намерение отправить Stars
- *  - НЕ вызывает реальный sendGiftStars (он пока не задокументирован стабильно)
- *
- * Позже сюда добавим реальный запрос к Telegram Bot API.
+ * - считаем, что у бота уже есть нужные звезды;
+ * - пользователь уже писал боту / стартовал его;
+ * - мы можем сослаться на пользователя по @username.
  */
-export async function sendGiftStars(username: string, stars: number): Promise<{
-  ok: boolean;
-  error?: string;
-}> {
+export async function sendGiftStars(username: string, stars: number) {
   if (!BOT_TOKEN || !API_URL) {
-    console.warn('TELEGRAM_BOT_TOKEN is not set, cannot send stars');
-    return { ok: false, error: 'NO_BOT_TOKEN' };
+    console.warn("NO TOKEN, cannot send gift stars");
+    return { ok: false as const, error: "NO_TOKEN" as const };
   }
 
-  // 1. Резолвим user_id
-  const res = await resolveUserId(username);
-  if (!res.ok || !res.userId) {
-    console.warn('sendGiftStars: cannot resolve user id', res.error);
-    return { ok: false, error: res.error || 'USER_RESOLVE_FAILED' };
+  if (!username || stars <= 0) {
+    return { ok: false as const, error: "BAD_PARAMS" as const };
   }
 
-  const userId = res.userId;
+  // Telegram обычно ждёт либо numeric user_id, либо @username.
+  const userRef = username.startsWith("@") ? username : `@${username}`;
 
-  // 2. Пока только логируем — реальный sendGiftStars добавим позже
-  console.log('sendGiftStars STUB => would send', {
-    to: username,
-    userId,
-    stars,
-  });
+  try {
+    const payload: Record<string, any> = {
+      // ⚠️ эту структуру проверь по официальной доке sendGiftStars
+      user_id: userRef,
+      star_count: stars,
+    };
 
-  // Здесь позже будет реальный запрос типа:
-  // await fetch(`${API_URL}/sendGiftStars`, { method: 'POST', body: ... })
+    const res = await fetch(`${API_URL}/sendGiftStars`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  return { ok: true };
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      console.error("sendGiftStars TG error:", data);
+      return { ok: false as const, error: "TG_API_ERROR" as const, data };
+    }
+
+    return { ok: true as const, data };
+  } catch (err) {
+    console.error("sendGiftStars error:", err);
+    return { ok: false as const, error: "TG_REQUEST_ERROR" as const };
+  }
 }
