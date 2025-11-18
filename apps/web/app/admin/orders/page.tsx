@@ -450,7 +450,8 @@ export default function AdminOrdersPage() {
                   style={{
                     textAlign: 'right',
                     fontVariantNumeric: 'tabular-nums',
-                    paddingRight: 8, // ← отступ справа от TON
+                    paddingRight: 12,
+                    whiteSpace: 'nowrap'// ← отступ справа от TON
                   }}
                 >
                   {tonFormatted}
@@ -458,7 +459,8 @@ export default function AdminOrdersPage() {
                 <div
                   style={{
                     textTransform: 'lowercase',
-                    paddingLeft: 8, // ← отступ слева у status
+                    paddingLeft: 12,
+                    whiteSpace: 'nowrap'// ← отступ слева у status
                   }}
                 >
                   {o.status}
