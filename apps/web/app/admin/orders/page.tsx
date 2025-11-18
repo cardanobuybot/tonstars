@@ -29,7 +29,7 @@ export default function AdminOrdersPage() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // ---------- загрузка заказов ----------
+  // --------------------- загрузка заказов ---------------------
   async function loadOrders(currentFilter: StatusFilter = filter, key?: string) {
     const k = key ?? adminKey;
     if (!k) {
@@ -41,14 +41,11 @@ export default function AdminOrdersPage() {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(
-        `/api/admin/orders?status=${encodeURIComponent(currentFilter)}`,
-        {
-          headers: {
-            'x-admin-key': k
-          }
+      const res = await fetch(`/api/admin/orders?status=${encodeURIComponent(currentFilter)}`, {
+        headers: {
+          'x-admin-key': k
         }
-      );
+      });
 
       const data = await res.json();
 
@@ -74,7 +71,7 @@ export default function AdminOrdersPage() {
     }
   }
 
-  // ---------- восстановить пароль из localStorage ----------
+  // восстановить пароль из localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const saved = window.localStorage.getItem(ADMIN_STORAGE_KEY);
@@ -91,7 +88,7 @@ export default function AdminOrdersPage() {
     await loadOrders(next);
   };
 
-  // ---------- логин ----------
+  // --------------------- логин ---------------------
   const handleLogin = async () => {
     if (!adminKey.trim()) return;
 
@@ -126,7 +123,18 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // ---------- отметить delivered ----------
+  // --------------------- logout ---------------------
+  const handleLogout = () => {
+    setIsAuthed(false);
+    setAdminKey('');
+    setOrders([]);
+    setError(null);
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(ADMIN_STORAGE_KEY);
+    }
+  };
+
+  // --------------------- отметить delivered ---------------------
   const markDelivered = async (id: number) => {
     if (!adminKey) return;
 
@@ -158,8 +166,8 @@ export default function AdminOrdersPage() {
         throw new Error(data?.error || 'ACTION_FAILED');
       }
 
-      setOrders((prev) =>
-        prev.map((o) =>
+      setOrders(prev =>
+        prev.map(o =>
           o.id === id
             ? {
                 ...o,
@@ -177,7 +185,9 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // ---------- экран логина ----------
+  // =====================================================
+  //              ЭКРАН ЛОГИНА
+  // =====================================================
   if (!isAuthed) {
     return (
       <div
@@ -202,18 +212,16 @@ export default function AdminOrdersPage() {
             boxShadow: '0 16px 40px rgba(0,0,0,0.6)'
           }}
         >
-          <h1 style={{ fontSize: 22, marginBottom: 8 }}>
-            TonStars — вход в админку
-          </h1>
+          <h1 style={{ fontSize: 22, marginBottom: 8 }}>TonStars — вход в админку</h1>
           <div style={{ opacity: 0.75, marginBottom: 16 }}>
-            Введи админ-пароль, который мы задали в переменной{' '}
-            <code>ADMIN_PASSWORD</code>.
+            Введи админ-пароль (значение переменной <code>ADMIN_PANEL_TOKEN</code> /
+            <code>NEXT_PUBLIC_ADMIN_TOKEN</code>).
           </div>
 
           <input
             type="password"
             value={adminKey}
-            onChange={(e) => setAdminKey(e.target.value)}
+            onChange={e => setAdminKey(e.target.value)}
             placeholder="Админ-пароль"
             style={{
               width: '100%',
@@ -229,9 +237,7 @@ export default function AdminOrdersPage() {
           />
 
           {error && (
-            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 8 }}>
-              {error}
-            </div>
+            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 8 }}>{error}</div>
           )}
 
           <button
@@ -265,7 +271,9 @@ export default function AdminOrdersPage() {
     );
   }
 
-  // ---------- основная админ-страница ----------
+  // =====================================================
+  //              ОСНОВНАЯ АДМИН-СТРАНИЦА
+  // =====================================================
   return (
     <div
       style={{
@@ -276,16 +284,14 @@ export default function AdminOrdersPage() {
         color: '#e5edf5'
       }}
     >
-      <h1 style={{ fontSize: 26, marginBottom: 8 }}>
-        TonStars — Админ / Заказы
-      </h1>
+      <h1 style={{ fontSize: 26, marginBottom: 8 }}>TonStars — Админ / Заказы</h1>
       <div style={{ opacity: 0.7, marginBottom: 16 }}>
         Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже
         отправлены пользователю вручную (после этого статус станет{' '}
         <code>delivered</code>).
       </div>
 
-      {/* Фильтр статуса */}
+      {/* Фильтр статуса + Обновить + Выйти */}
       <div
         style={{
           display: 'flex',
@@ -296,9 +302,8 @@ export default function AdminOrdersPage() {
         }}
       >
         <span style={{ opacity: 0.8 }}>Фильтр:</span>
-
         {(['open', 'pending', 'paid', 'delivered', 'refunded', 'all'] as StatusFilter[]).map(
-          (st) => {
+          st => {
             const labelMap: Record<StatusFilter, string> = {
               open: 'Открытые',
               pending: 'pending',
@@ -328,30 +333,50 @@ export default function AdminOrdersPage() {
           }
         )}
 
-        <button
-          onClick={() => loadOrders(filter)}
+        <div
           style={{
             marginLeft: 'auto',
-            padding: '6px 14px',
-            borderRadius: 999,
-            border: '1px solid rgba(255,255,255,0.1)',
-            background: 'transparent',
-            color: '#cdd6f4',
-            fontSize: 14,
-            cursor: 'pointer',
             display: 'flex',
-            alignItems: 'center',
-            gap: 6
+            gap: 8
           }}
         >
-          <span style={{ fontSize: 16 }}>↻</span>
-          Обновить
-        </button>
+          <button
+            onClick={() => loadOrders(filter)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 999,
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'transparent',
+              color: '#cdd6f4',
+              fontSize: 14,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <span style={{ fontSize: 16 }}>↻</span>
+            Обновить
+          </button>
+
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 999,
+              border: '1px solid rgba(255,90,90,0.7)',
+              background: 'transparent',
+              color: '#ff6b6b',
+              fontSize: 14,
+              cursor: 'pointer'
+            }}
+          >
+            Выйти
+          </button>
+        </div>
       </div>
 
-      {loading && (
-        <div style={{ opacity: 0.7, marginBottom: 8 }}>Загружаем заказы…</div>
-      )}
+      {loading && <div style={{ opacity: 0.7, marginBottom: 8 }}>Загружаем заказы…</div>}
       {error && (
         <div style={{ color: '#ff6b6b', marginBottom: 8, fontSize: 13 }}>
           Ошибка: {error}
@@ -385,12 +410,12 @@ export default function AdminOrdersPage() {
             <div>Username</div>
             <div style={{ textAlign: 'right' }}>Stars</div>
             <div style={{ textAlign: 'right' }}>TON</div>
-            <div>Status</div>
+            <div style={{ paddingLeft: 12 }}>Status</div>
             <div>Created</div>
             <div style={{ textAlign: 'center' }}>Actions</div>
           </div>
 
-          {orders.map((o) => {
+          {orders.map(o => {
             const created = new Date(o.created_at).toLocaleString();
             const tonNum = Number(o.ton_amount);
             const tonFormatted = Number.isFinite(tonNum)
@@ -417,15 +442,13 @@ export default function AdminOrdersPage() {
                 <div style={{ opacity: 0.85 }}>#{o.id}</div>
                 <div style={{ opacity: 0.9 }}>@{o.tg_username}</div>
                 <div style={{ textAlign: 'right' }}>{o.stars}</div>
-                <div
-                  style={{
-                    textAlign: 'right',
-                    fontVariantNumeric: 'tabular-nums'
-                  }}
-                >
+                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   {tonFormatted}
                 </div>
-                <div style={{ textTransform: 'lowercase' }}>{o.status}</div>
+                {/* тут добавили отступ, чтобы не слипалось "0.0002pending" */}
+                <div style={{ textTransform: 'lowercase', paddingLeft: 12 }}>
+                  {o.status}
+                </div>
                 <div style={{ fontSize: 12, opacity: 0.8 }}>{created}</div>
                 <div style={{ textAlign: 'center' }}>
                   {canMarkDelivered ? (
@@ -442,8 +465,7 @@ export default function AdminOrdersPage() {
                             : 'transparent',
                         color: '#2ecc71',
                         fontSize: 12,
-                        cursor:
-                          actionLoadingId === o.id ? 'default' : 'pointer',
+                        cursor: actionLoadingId === o.id ? 'default' : 'pointer',
                         whiteSpace: 'nowrap'
                       }}
                     >
