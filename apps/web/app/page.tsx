@@ -7,7 +7,7 @@ import {
   useTonWallet
 } from '@tonconnect/ui-react';
 
-// курс: сколько TON за 1 звезду
+// курс: сколько TON за одну звезду
 // меняешь только это число, если захочешь другой курс
 const STAR_TON_RATE = 0.0002;
 
