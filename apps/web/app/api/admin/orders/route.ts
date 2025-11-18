@@ -10,26 +10,17 @@ const pool = new Pool({
 //   ADMIN AUTH
 // =============================
 function checkAdmin(req: Request): boolean {
-  // Берём ключ из любых возможных переменных, которые ты мог создать
-  const adminKey =
-    process.env.ADMIN_PANEL_TOKEN ||
-    process.env.ADMIN_PASSWORD ||
-    process.env.NEXT_PUBLIC_ADMIN_TOKEN; // то, что у тебя точно есть
-
+  const adminKey = process.env.ADMIN_PANEL_TOKEN;
   if (!adminKey) {
-    console.error("NO ADMIN KEY: set ADMIN_PANEL_TOKEN or ADMIN_PASSWORD");
+    console.error("ADMIN_PANEL_TOKEN is NOT set");
     return false;
   }
 
-  // 1) Проверяем header: x-admin-key или x-admin-token
-  const hdrKey = req.headers.get("x-admin-key");
-  const hdrToken = req.headers.get("x-admin-token");
+  // 1) Проверяем header
+  const hdr = req.headers.get("x-admin-token");
+  if (hdr && hdr === adminKey) return true;
 
-  if ((hdrKey && hdrKey === adminKey) || (hdrToken && hdrToken === adminKey)) {
-    return true;
-  }
-
-  // 2) Проверяем query-параметр: ?key=...
+  // 2) Проверяем ?key=...
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
   if (key && key === adminKey) return true;
@@ -38,7 +29,7 @@ function checkAdmin(req: Request): boolean {
 }
 
 // =========================================================
-// GET  — получить список заказов
+// GET  — либо список заказов, либо статистика (?mode=stats)
 // =========================================================
 export async function GET(req: Request) {
   if (!checkAdmin(req)) {
@@ -49,10 +40,45 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const status = url.searchParams.get("status") || "open";
+  const mode = url.searchParams.get("mode") || "list";
 
   const client = await pool.connect();
+
   try {
+    if (mode === "stats") {
+      // простая агрегированная статистика
+      const res = await client.query(
+        `
+        SELECT
+          COALESCE(SUM(stars), 0)                    AS total_stars,
+          COALESCE(SUM(ton_amount), 0)              AS total_ton,
+          COUNT(*)                                  AS total_orders,
+          SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END)       AS paid_orders,
+          SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END)  AS delivered_orders,
+          SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END)   AS refunded_orders
+        FROM star_orders
+        WHERE status IN ('paid','delivered','refunded')
+        `
+      );
+
+      const row = res.rows[0] || {};
+
+      return NextResponse.json({
+        ok: true,
+        stats: {
+          total_stars: Number(row.total_stars || 0),
+          total_ton: Number(row.total_ton || 0),
+          total_orders: Number(row.total_orders || 0),
+          paid_orders: Number(row.paid_orders || 0),
+          delivered_orders: Number(row.delivered_orders || 0),
+          refunded_orders: Number(row.refunded_orders || 0)
+        }
+      });
+    }
+
+    // режим "list" — обычный список заказов
+    const status = url.searchParams.get("status") || "open";
+
     let query = `
       SELECT *
       FROM star_orders
@@ -85,7 +111,7 @@ export async function GET(req: Request) {
 }
 
 // =========================================================
-// POST — действие над заказом ("mark_delivered")
+// POST — действия над заказом: mark_delivered / refund
 // =========================================================
 export async function POST(req: Request) {
   if (!checkAdmin(req)) {
@@ -108,15 +134,43 @@ export async function POST(req: Request) {
     }
 
     const client = await pool.connect();
+
     try {
       if (action === "mark_delivered") {
         const res = await client.query(
           `
-            UPDATE star_orders
-            SET status = 'delivered',
-                updated_at = now()
-            WHERE id = $1
-            RETURNING id, status
+          UPDATE star_orders
+          SET status = 'delivered',
+              updated_at = now()
+          WHERE id = $1
+          RETURNING id, status
+          `,
+          [id]
+        );
+
+        if (res.rowCount === 0) {
+          return NextResponse.json(
+            { ok: false, error: "ORDER_NOT_FOUND" },
+            { status: 404 }
+          );
+        }
+
+        return NextResponse.json({
+          ok: true,
+          new_status: res.rows[0].status
+        });
+      }
+
+      if (action === "refund") {
+        // ВАЖНО: здесь мы только помечаем заказ как refunded.
+        // Сам возврат TON ты делаешь руками из кошелька.
+        const res = await client.query(
+          `
+          UPDATE star_orders
+          SET status = 'refunded',
+              updated_at = now()
+          WHERE id = $1
+          RETURNING id, status
           `,
           [id]
         );
