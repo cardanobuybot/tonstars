@@ -29,7 +29,6 @@ export default function AdminOrdersPage() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // --------------------- загрузка заказов ---------------------
   async function loadOrders(currentFilter: StatusFilter = filter, key?: string) {
     const k = key ?? adminKey;
     if (!k) {
@@ -43,7 +42,7 @@ export default function AdminOrdersPage() {
 
       const res = await fetch(`/api/admin/orders?status=${encodeURIComponent(currentFilter)}`, {
         headers: {
-          'x-admin-key': k
+          'x-admin-token': k
         }
       });
 
@@ -88,9 +87,9 @@ export default function AdminOrdersPage() {
     await loadOrders(next);
   };
 
-  // --------------------- логин ---------------------
   const handleLogin = async () => {
-    if (!adminKey.trim()) return;
+    const key = adminKey.trim();
+    if (!key) return;
 
     try {
       setLoginLoading(true);
@@ -98,7 +97,7 @@ export default function AdminOrdersPage() {
 
       const res = await fetch('/api/admin/orders?status=open', {
         headers: {
-          'x-admin-key': adminKey.trim()
+          'x-admin-token': key
         }
       });
 
@@ -109,7 +108,7 @@ export default function AdminOrdersPage() {
       }
 
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(ADMIN_STORAGE_KEY, adminKey.trim());
+        window.localStorage.setItem(ADMIN_STORAGE_KEY, key);
       }
       setIsAuthed(true);
       setOrders(data.orders ?? []);
@@ -123,18 +122,15 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // --------------------- logout ---------------------
   const handleLogout = () => {
     setIsAuthed(false);
     setAdminKey('');
     setOrders([]);
-    setError(null);
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem(ADMIN_STORAGE_KEY);
     }
   };
 
-  // --------------------- отметить delivered ---------------------
   const markDelivered = async (id: number) => {
     if (!adminKey) return;
 
@@ -146,7 +142,7 @@ export default function AdminOrdersPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-key': adminKey
+          'x-admin-token': adminKey
         },
         body: JSON.stringify({ id, action: 'mark_delivered' })
       });
@@ -169,11 +165,7 @@ export default function AdminOrdersPage() {
       setOrders(prev =>
         prev.map(o =>
           o.id === id
-            ? {
-                ...o,
-                status: data.new_status ?? 'delivered',
-                updated_at: new Date().toISOString()
-              }
+            ? { ...o, status: data.new_status ?? 'delivered', updated_at: new Date().toISOString() }
             : o
         )
       );
@@ -185,9 +177,53 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // =====================================================
-  //              ЭКРАН ЛОГИНА
-  // =====================================================
+  const markRefunded = async (id: number) => {
+    if (!adminKey) return;
+
+    try {
+      setActionLoadingId(id);
+      setError(null);
+
+      const res = await fetch('/api/admin/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminKey
+        },
+        body: JSON.stringify({ id, action: 'mark_refunded' })
+      });
+
+      const data = await res.json();
+
+      if (res.status === 401) {
+        setIsAuthed(false);
+        setAdminKey('');
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(ADMIN_STORAGE_KEY);
+        }
+        throw new Error('UNAUTHORIZED');
+      }
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'ACTION_FAILED');
+      }
+
+      setOrders(prev =>
+        prev.map(o =>
+          o.id === id
+            ? { ...o, status: data.new_status ?? 'refunded', updated_at: new Date().toISOString() }
+            : o
+        )
+      );
+    } catch (err: any) {
+      console.error('markRefunded error:', err);
+      setError(err?.message || String(err));
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // ---------- экран логина ----------
   if (!isAuthed) {
     return (
       <div
@@ -271,9 +307,15 @@ export default function AdminOrdersPage() {
     );
   }
 
-  // =====================================================
-  //              ОСНОВНАЯ АДМИН-СТРАНИЦА
-  // =====================================================
+  // простая статистика по текущему списку
+  const totalOrders = orders.length;
+  const totalStars = orders.reduce((sum, o) => sum + Number(o.stars || 0), 0);
+  const totalTon = orders.reduce(
+    (sum, o) => sum + (Number(o.ton_amount || 0) || 0),
+    0
+  );
+
+  // ---------- основная админ-страница ----------
   return (
     <div
       style={{
@@ -284,20 +326,47 @@ export default function AdminOrdersPage() {
         color: '#e5edf5'
       }}
     >
-      <h1 style={{ fontSize: 26, marginBottom: 8 }}>TonStars — Админ / Заказы</h1>
-      <div style={{ opacity: 0.7, marginBottom: 16 }}>
-        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже
-        отправлены пользователю вручную (после этого статус станет{' '}
-        <code>delivered</code>).
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 8,
+          flexWrap: 'wrap'
+        }}
+      >
+        <h1 style={{ fontSize: 26, marginBottom: 0 }}>TonStars — Админ / Заказы</h1>
+
+        <button
+          onClick={handleLogout}
+          style={{
+            marginLeft: 'auto',
+            padding: '6px 14px',
+            borderRadius: 999,
+            border: '1px solid rgba(255,80,80,0.7)',
+            background: 'rgba(120,20,30,0.15)',
+            color: '#ff7b88',
+            fontSize: 14,
+            cursor: 'pointer'
+          }}
+        >
+          Выйти
+        </button>
       </div>
 
-      {/* Фильтр статуса + Обновить + Выйти */}
+      <div style={{ opacity: 0.7, marginBottom: 16 }}>
+        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже отправлены
+        пользователю вручную (после этого статус станет <code>delivered</code>) или пометить
+        заказ как <code>refunded</code>.
+      </div>
+
+      {/* Фильтр статуса */}
       <div
         style={{
           display: 'flex',
           flexWrap: 'wrap',
           gap: 8,
-          marginBottom: 16,
+          marginBottom: 12,
           alignItems: 'center'
         }}
       >
@@ -333,47 +402,41 @@ export default function AdminOrdersPage() {
           }
         )}
 
-        <div
+        <button
+          onClick={() => loadOrders(filter)}
           style={{
             marginLeft: 'auto',
+            padding: '6px 14px',
+            borderRadius: 999,
+            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'transparent',
+            color: '#cdd6f4',
+            fontSize: 14,
+            cursor: 'pointer',
             display: 'flex',
-            gap: 8
+            alignItems: 'center',
+            gap: 6
           }}
         >
-          <button
-            onClick={() => loadOrders(filter)}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 999,
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: 'transparent',
-              color: '#cdd6f4',
-              fontSize: 14,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <span style={{ fontSize: 16 }}>↻</span>
-            Обновить
-          </button>
+          <span style={{ fontSize: 16 }}>↻</span>
+          Обновить
+        </button>
+      </div>
 
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 999,
-              border: '1px solid rgba(255,90,90,0.7)',
-              background: 'transparent',
-              color: '#ff6b6b',
-              fontSize: 14,
-              cursor: 'pointer'
-            }}
-          >
-            Выйти
-          </button>
-        </div>
+      {/* статистика по текущему фильтру */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 16,
+          marginBottom: 16,
+          fontSize: 14,
+          opacity: 0.9
+        }}
+      >
+        <div>Заказов: <b>{totalOrders}</b></div>
+        <div>Звёзд: <b>{totalStars}</b></div>
+        <div>TON: <b>{totalTon.toFixed(4)}</b></div>
       </div>
 
       {loading && <div style={{ opacity: 0.7, marginBottom: 8 }}>Загружаем заказы…</div>}
@@ -396,7 +459,7 @@ export default function AdminOrdersPage() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1fr',
+              gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1.8fr',
               padding: '10px 12px',
               background: 'linear-gradient(90deg,#111828,#06101e)',
               fontSize: 12,
@@ -410,7 +473,7 @@ export default function AdminOrdersPage() {
             <div>Username</div>
             <div style={{ textAlign: 'right' }}>Stars</div>
             <div style={{ textAlign: 'right' }}>TON</div>
-            <div style={{ paddingLeft: 12 }}>Status</div>
+            <div>Status</div>
             <div>Created</div>
             <div style={{ textAlign: 'center' }}>Actions</div>
           </div>
@@ -422,20 +485,22 @@ export default function AdminOrdersPage() {
               ? tonNum.toFixed(4)
               : String(o.ton_amount ?? '');
 
-            const canMarkDelivered = o.status === 'paid';
+            const isPaid = o.status === 'paid';
 
             return (
               <div
                 key={o.id}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1fr',
+                  gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1.8fr',
                   padding: '9px 12px',
                   fontSize: 14,
                   borderTop: '1px solid rgba(255,255,255,0.04)',
                   background:
                     o.status === 'delivered'
                       ? 'rgba(46, 204, 113, 0.04)'
+                      : o.status === 'refunded'
+                      ? 'rgba(231, 76, 60, 0.04)'
                       : 'transparent'
                 }}
               >
@@ -445,32 +510,60 @@ export default function AdminOrdersPage() {
                 <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                   {tonFormatted}
                 </div>
-                {/* тут добавили отступ, чтобы не слипалось "0.0002pending" */}
-                <div style={{ textTransform: 'lowercase', paddingLeft: 12 }}>
-                  {o.status}
-                </div>
+                <div style={{ textTransform: 'lowercase' }}>{o.status}</div>
                 <div style={{ fontSize: 12, opacity: 0.8 }}>{created}</div>
-                <div style={{ textAlign: 'center' }}>
-                  {canMarkDelivered ? (
-                    <button
-                      onClick={() => markDelivered(o.id)}
-                      disabled={actionLoadingId === o.id}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: 999,
-                        border: '1px solid rgba(46, 204, 113, 0.5)',
-                        background:
-                          actionLoadingId === o.id
-                            ? 'rgba(46, 204, 113, 0.1)'
-                            : 'transparent',
-                        color: '#2ecc71',
-                        fontSize: 12,
-                        cursor: actionLoadingId === o.id ? 'default' : 'pointer',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {actionLoadingId === o.id ? 'Сохраняю…' : 'delivered'}
-                    </button>
+                <div
+                  style={{
+                    textAlign: 'center',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    gap: 8
+                  }}
+                >
+                  {isPaid ? (
+                    <>
+                      <button
+                        onClick={() => markDelivered(o.id)}
+                        disabled={actionLoadingId === o.id}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          border: '1px solid rgba(46, 204, 113, 0.5)',
+                          background:
+                            actionLoadingId === o.id
+                              ? 'rgba(46, 204, 113, 0.1)'
+                              : 'transparent',
+                          color: '#2ecc71',
+                          fontSize: 12,
+                          cursor:
+                            actionLoadingId === o.id ? 'default' : 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {actionLoadingId === o.id ? '…' : 'delivered'}
+                      </button>
+
+                      <button
+                        onClick={() => markRefunded(o.id)}
+                        disabled={actionLoadingId === o.id}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          border: '1px solid rgba(231, 76, 60, 0.6)',
+                          background:
+                            actionLoadingId === o.id
+                              ? 'rgba(231, 76, 60, 0.12)'
+                              : 'transparent',
+                          color: '#e74c3c',
+                          fontSize: 12,
+                          cursor:
+                            actionLoadingId === o.id ? 'default' : 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {actionLoadingId === o.id ? '…' : 'refund'}
+                      </button>
+                    </>
                   ) : (
                     <span style={{ opacity: 0.5, fontSize: 12 }}>—</span>
                   )}
