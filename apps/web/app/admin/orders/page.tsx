@@ -16,8 +16,6 @@ type Order = {
 
 type StatusFilter = 'open' | 'pending' | 'paid' | 'delivered' | 'refunded' | 'all';
 
-const ADMIN_STORAGE_KEY = 'ts_admin_key';
-
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,37 +23,13 @@ export default function AdminOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
-  const [adminKey, setAdminKey] = useState('');
-  const [isAuthed, setIsAuthed] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
-
-  async function loadOrders(currentFilter: StatusFilter = filter, key?: string) {
-    const k = key ?? adminKey;
-    if (!k) {
-      setError('NO_ADMIN_KEY');
-      return;
-    }
-
+  async function loadOrders(currentFilter: StatusFilter = filter) {
     try {
       setLoading(true);
       setError(null);
 
-      const res = await fetch(`/api/admin/orders?status=${encodeURIComponent(currentFilter)}`, {
-        headers: {
-          'x-admin-key': k
-        }
-      });
-
+      const res = await fetch(`/api/admin/orders?status=${encodeURIComponent(currentFilter)}`);
       const data = await res.json();
-
-      if (res.status === 401) {
-        setIsAuthed(false);
-        setAdminKey('');
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(ADMIN_STORAGE_KEY);
-        }
-        throw new Error('UNAUTHORIZED');
-      }
 
       if (!res.ok || !data.ok) {
         throw new Error(data?.error || 'LOAD_FAILED');
@@ -70,15 +44,8 @@ export default function AdminOrdersPage() {
     }
   }
 
-  // восстановить пароль из localStorage
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const saved = window.localStorage.getItem(ADMIN_STORAGE_KEY);
-    if (saved) {
-      setAdminKey(saved);
-      setIsAuthed(true);
-      loadOrders('open', saved).catch(() => {});
-    }
+    loadOrders('open');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -87,66 +54,18 @@ export default function AdminOrdersPage() {
     await loadOrders(next);
   };
 
-  const handleLogin = async () => {
-    if (!adminKey.trim()) return;
-
-    try {
-      setLoginLoading(true);
-      setError(null);
-
-      const res = await fetch('/api/admin/orders?status=open', {
-        headers: {
-          'x-admin-key': adminKey.trim()
-        }
-      });
-
-      const data = await res.json();
-
-      if (res.status === 401 || !data.ok) {
-        throw new Error('UNAUTHORIZED');
-      }
-
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(ADMIN_STORAGE_KEY, adminKey.trim());
-      }
-      setIsAuthed(true);
-      setOrders(data.orders ?? []);
-      setFilter('open');
-    } catch (err: any) {
-      console.error('login error:', err);
-      setError('Неверный админ-пароль');
-      setIsAuthed(false);
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
   const markDelivered = async (id: number) => {
-    if (!adminKey) return;
-
     try {
       setActionLoadingId(id);
       setError(null);
 
       const res = await fetch('/api/admin/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': adminKey
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, action: 'mark_delivered' })
       });
 
       const data = await res.json();
-
-      if (res.status === 401) {
-        setIsAuthed(false);
-        setAdminKey('');
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(ADMIN_STORAGE_KEY);
-        }
-        throw new Error('UNAUTHORIZED');
-      }
 
       if (!res.ok || !data.ok) {
         throw new Error(data?.error || 'ACTION_FAILED');
@@ -155,11 +74,7 @@ export default function AdminOrdersPage() {
       setOrders((prev) =>
         prev.map((o) =>
           o.id === id
-            ? {
-                ...o,
-                status: data.new_status ?? 'delivered',
-                updated_at: new Date().toISOString()
-              }
+            ? { ...o, status: data.new_status ?? 'delivered', updated_at: new Date().toISOString() }
             : o
         )
       );
@@ -171,104 +86,36 @@ export default function AdminOrdersPage() {
     }
   };
 
-  // ---------- экран логина ----------
-  if (!isAuthed) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'radial-gradient(circle at top,#18253a,#05070b)',
-          color: '#e5edf5',
-          padding: 16
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 420,
-            padding: 24,
-            borderRadius: 18,
-            background: 'rgba(7,12,20,0.96)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            boxShadow: '0 16px 40px rgba(0,0,0,0.6)'
-          }}
-        >
-          <h1 style={{ fontSize: 22, marginBottom: 8 }}>TonStars — вход в админку</h1>
-          <div style={{ opacity: 0.75, marginBottom: 16 }}>
-            Введи админ-пароль, который мы задали в переменной <code>ADMIN_PASSWORD</code>.
-          </div>
+  const formatDate = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return iso;
+    }
+  };
 
-          <input
-            type="password"
-            value={adminKey}
-            onChange={(e) => setAdminKey(e.target.value)}
-            placeholder="Админ-пароль"
-            style={{
-              width: '100%',
-              height: 48,
-              borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.12)',
-              background: '#0c1018',
-              padding: '0 14px',
-              color: '#e6ebff',
-              outline: 'none',
-              marginBottom: 12
-            }}
-          />
-
-          {error && (
-            <div style={{ color: '#ff6b6b', fontSize: 13, marginBottom: 8 }}>{error}</div>
-          )}
-
-          <button
-            onClick={handleLogin}
-            disabled={loginLoading || !adminKey.trim()}
-            style={{
-              width: '100%',
-              height: 48,
-              borderRadius: 14,
-              border: 'none',
-              background:
-                loginLoading || !adminKey.trim()
-                  ? 'rgba(255,255,255,0.06)'
-                  : 'linear-gradient(90deg,#2a86ff,#16e3c9)',
-              color:
-                loginLoading || !adminKey.trim()
-                  ? 'rgba(230,235,255,0.5)'
-                  : '#001014',
-              fontSize: 16,
-              fontWeight: 700,
-              cursor:
-                loginLoading || !adminKey.trim()
-                  ? 'default'
-                  : 'pointer'
-            }}
-          >
-            {loginLoading ? 'Проверяем…' : 'Войти'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---------- основная админ-страница ----------
   return (
     <div
       style={{
         minHeight: '100vh',
-        padding: '24px 16px 40px',
-        maxWidth: 960,
+        padding: '24px 12px 40px',
+        maxWidth: 1100,
         margin: '0 auto',
         color: '#e5edf5'
       }}
     >
       <h1 style={{ fontSize: 26, marginBottom: 8 }}>TonStars — Админ / Заказы</h1>
       <div style={{ opacity: 0.7, marginBottom: 16 }}>
-        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже отправлены
-        пользователю вручную (после этого статус станет <code>delivered</code>).
+        Тут ты видишь заказы, статусы оплаты и можешь отметить, что звёзды уже
+        отправлены пользователю вручную (после этого статус станет{' '}
+        <code>delivered</code>).
       </div>
 
       {/* Фильтр статуса */}
@@ -296,13 +143,19 @@ export default function AdminOrdersPage() {
             return (
               <button
                 key={st}
+                type="button"
                 onClick={() => handleFilterChange(st)}
                 style={{
-                  padding: '6px 14px',
+                  padding: '8px 14px',
                   borderRadius: 999,
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  background: active ? 'rgba(0,152,234,0.32)' : 'transparent',
-                  color: active ? '#fff' : '#cdd6f4',
+                  border: active
+                    ? '1px solid rgba(22,227,201,0.8)'
+                    : '1px solid rgba(148,163,184,0.45)',
+                  background: active
+                    ? 'linear-gradient(90deg,#2563eb,#14b8a6)'
+                    : 'rgba(15,23,42,0.85)',
+                  color: active ? '#001014' : '#e5edf5',
+                  fontWeight: 600,
                   fontSize: 14,
                   cursor: 'pointer'
                 }}
@@ -314,134 +167,163 @@ export default function AdminOrdersPage() {
         )}
 
         <button
+          type="button"
           onClick={() => loadOrders(filter)}
           style={{
             marginLeft: 'auto',
-            padding: '6px 14px',
+            padding: '8px 14px',
             borderRadius: 999,
-            border: '1px solid rgba(255,255,255,0.1)',
-            background: 'transparent',
-            color: '#cdd6f4',
+            border: '1px solid rgba(148,163,184,0.45)',
+            background: 'rgba(15,23,42,0.9)',
+            color: '#e5edf5',
+            fontWeight: 500,
             fontSize: 14,
-            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: 6
+            gap: 6,
+            cursor: 'pointer'
           }}
         >
-          <span style={{ fontSize: 16 }}>↻</span>
-          Обновить
+          ⟳ Обновить
         </button>
       </div>
 
-      {loading && <div style={{ opacity: 0.7, marginBottom: 8 }}>Загружаем заказы…</div>}
+      {loading && (
+        <div style={{ marginBottom: 12, fontSize: 14, opacity: 0.85 }}>Загружаем заказы…</div>
+      )}
+
       {error && (
-        <div style={{ color: '#ff6b6b', marginBottom: 8, fontSize: 13 }}>
+        <div
+          style={{
+            marginBottom: 12,
+            fontSize: 14,
+            color: '#fecaca'
+          }}
+        >
           Ошибка: {error}
         </div>
       )}
 
-      {/* Таблица заказов + горизонтальный скролл */}
+      {/* Таблица заказов */}
       <div
         style={{
-          borderRadius: 18,
-          border: '1px solid rgba(255,255,255,0.08)',
-          background: 'linear-gradient(180deg,#080c12,#05070b)',
-          overflowX: 'auto'
+          overflowX: 'auto',
+          borderRadius: 14,
+          border: '1px solid rgba(148,163,184,0.45)',
+          background: 'rgba(15,23,42,0.95)'
         }}
       >
-        <div style={{ minWidth: 720 }}>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1fr',
-              padding: '10px 12px',
-              background: 'linear-gradient(90deg,#111828,#06101e)',
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: 0.3,
-              textTransform: 'uppercase',
-              opacity: 0.9
-            }}
-          >
-            <div>ID</div>
-            <div>Username</div>
-            <div style={{ textAlign: 'right' }}>Stars</div>
-            <div style={{ textAlign: 'right' }}>TON</div>
-            <div>Status</div>
-            <div>Created</div>
-            <div style={{ textAlign: 'center' }}>Actions</div>
-          </div>
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            minWidth: 700
+          }}
+        >
+          <thead>
+            <tr
+              style={{
+                background: 'linear-gradient(90deg,#0f172a,#020617)'
+              }}
+            >
+              <th style={thStyle}>ID</th>
+              <th style={thStyle}>USERNAME</th>
+              <th style={thStyle}>STARS</th>
+              <th style={thStyle}>TON</th>
+              <th style={thStyle}>STATUS</th>
+              <th style={thStyle}>CREATED</th>
+              <th style={thStyle}>ACTION</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.length === 0 && !loading ? (
+              <tr>
+                <td
+                  colSpan={7}
+                  style={{
+                    padding: '14px 10px',
+                    textAlign: 'center',
+                    fontSize: 14,
+                    opacity: 0.7
+                  }}
+                >
+                  Заказов нет.
+                </td>
+              </tr>
+            ) : (
+              orders.map((o) => {
+                const ton = Number(o.ton_amount);
+                const tonPretty = Number.isFinite(ton)
+                  ? ton.toFixed(4)
+                  : o.ton_amount;
 
-          {orders.map((o) => {
-            const created = new Date(o.created_at).toLocaleString();
-            const tonNum = Number(o.ton_amount);
-            const tonFormatted = Number.isFinite(tonNum)
-              ? tonNum.toFixed(4)
-              : String(o.ton_amount ?? '');
+                const isDelivered = o.status === 'delivered';
 
-            const canMarkDelivered = o.status === 'paid';
-
-            return (
-              <div
-                key={o.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '60px 1.6fr 0.8fr 1fr 1.1fr 1.4fr 1fr',
-                  padding: '9px 12px',
-                  fontSize: 14,
-                  borderTop: '1px solid rgba(255,255,255,0.04)',
-                  background:
-                    o.status === 'delivered'
-                      ? 'rgba(46, 204, 113, 0.04)'
-                      : 'transparent'
-                }}
-              >
-                <div style={{ opacity: 0.85 }}>#{o.id}</div>
-                <div style={{ opacity: 0.9 }}>@{o.tg_username}</div>
-                <div style={{ textAlign: 'right' }}>{o.stars}</div>
-                <div style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-                  {tonFormatted}
-                </div>
-                <div style={{ textTransform: 'lowercase' }}>{o.status}</div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>{created}</div>
-                <div style={{ textAlign: 'center' }}>
-                  {canMarkDelivered ? (
-                    <button
-                      onClick={() => markDelivered(o.id)}
-                      disabled={actionLoadingId === o.id}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: 999,
-                        border: '1px solid rgba(46, 204, 113, 0.5)',
-                        background:
-                          actionLoadingId === o.id
-                            ? 'rgba(46, 204, 113, 0.1)'
-                            : 'transparent',
-                        color: '#2ecc71',
-                        fontSize: 12,
-                        cursor:
-                          actionLoadingId === o.id ? 'default' : 'pointer',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {actionLoadingId === o.id ? 'Сохраняю…' : 'delivered'}
-                    </button>
-                  ) : (
-                    <span style={{ opacity: 0.5, fontSize: 12 }}>—</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {orders.length === 0 && !loading && (
-            <div style={{ padding: 14, fontSize: 14, opacity: 0.8 }}>
-              Заказов с таким фильтром нет.
-            </div>
-          )}
-        </div>
+                return (
+                  <tr
+                    key={o.id}
+                    style={{
+                      borderTop: '1px solid rgba(30,41,59,0.9)'
+                    }}
+                  >
+                    <td style={tdStyle}>#{o.id}</td>
+                    <td style={tdStyle}>@{o.tg_username}</td>
+                    <td style={tdStyle}>{o.stars}</td>
+                    <td style={tdStyle}>{tonPretty}</td>
+                    <td style={tdStyle}>{o.status}</td>
+                    <td style={tdStyle}>{formatDate(o.created_at)}</td>
+                    <td style={tdStyle}>
+                      <button
+                        type="button"
+                        onClick={() => markDelivered(o.id)}
+                        disabled={isDelivered || actionLoadingId === o.id}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 999,
+                          border: '1px solid rgba(56,189,248,0.7)',
+                          background: isDelivered
+                            ? 'rgba(22,163,74,0.2)'
+                            : 'rgba(8,47,73,0.9)',
+                          color: isDelivered ? '#bbf7d0' : '#e0f2fe',
+                          fontSize: 13,
+                          cursor:
+                            isDelivered || actionLoadingId === o.id
+                              ? 'default'
+                              : 'pointer',
+                          opacity:
+                            isDelivered || actionLoadingId === o.id ? 0.6 : 1
+                        }}
+                      >
+                        {isDelivered
+                          ? '✓ delivered'
+                          : actionLoadingId === o.id
+                          ? '…'
+                          : 'Mark delivered'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
+
+const thStyle: React.CSSProperties = {
+  textAlign: 'left',
+  padding: '10px 12px',
+  fontSize: 12,
+  letterSpacing: 0.7,
+  textTransform: 'uppercase',
+  opacity: 0.7,
+  whiteSpace: 'nowrap'
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  fontSize: 14,
+  whiteSpace: 'nowrap'
+};
