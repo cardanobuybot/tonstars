@@ -10,9 +10,19 @@
     "skipLibCheck": true,
     "strict": true,
     "esModuleInterop": true,
+
     "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    },
+
     "types": ["node", "react", "react-dom"]
   },
-  "include": ["next-env.d.ts", ".next/types/**/*.ts", "**/*.ts", "**/*.tsx"],
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
   "exclude": ["node_modules"]
 }
