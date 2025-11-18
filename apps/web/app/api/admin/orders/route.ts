@@ -10,15 +10,24 @@ const pool = new Pool({
 //   ADMIN AUTH
 // =============================
 function checkAdmin(req: Request): boolean {
-  const adminKey = process.env.ADMIN_PANEL_TOKEN;
+  // Берём ключ из любых возможных переменных, которые ты мог создать
+  const adminKey =
+    process.env.ADMIN_PANEL_TOKEN ||
+    process.env.ADMIN_PASSWORD ||
+    process.env.NEXT_PUBLIC_ADMIN_TOKEN; // то, что у тебя точно есть
+
   if (!adminKey) {
-    console.error("ADMIN_PANEL_TOKEN is NOT set");
+    console.error("NO ADMIN KEY: set ADMIN_PANEL_TOKEN or ADMIN_PASSWORD");
     return false;
   }
 
-  // 1) Проверяем header
-  const hdr = req.headers.get("x-admin-token");
-  if (hdr && hdr === adminKey) return true;
+  // 1) Проверяем header: x-admin-key или x-admin-token
+  const hdrKey = req.headers.get("x-admin-key");
+  const hdrToken = req.headers.get("x-admin-token");
+
+  if ((hdrKey && hdrKey === adminKey) || (hdrToken && hdrToken === adminKey)) {
+    return true;
+  }
 
   // 2) Проверяем query-параметр: ?key=...
   const url = new URL(req.url);
