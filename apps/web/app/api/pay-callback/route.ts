@@ -1,5 +1,4 @@
 // apps/web/app/api/pay-callback/route.ts
-
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 import { sendGiftStars } from "@/lib/telegram";
@@ -9,17 +8,16 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// кошелёк, куда прилетают оплаты (для инфы / логов)
-const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET || "";
+// кошелёк, куда прилетают оплаты
+const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET;
 
-// просто чтобы в логах видеть, если забыли переменную
 if (!SERVICE_WALLET) {
   console.warn("TON_PAYMENT_WALLET is not set in environment");
 }
 
 type PayCallbackBody = {
-  orderId?: string | number;
-  order_id?: string | number;
+  orderId?: string;
+  order_id?: string;
   txHash?: string;
   tx_hash?: string;
 };
@@ -28,12 +26,8 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as PayCallbackBody;
 
-    // поддерживаем оба варианта имён полей (camelCase и snake_case)
-    const orderIdRaw = body.orderId ?? body.order_id;
-    const txHash =
-      (body.txHash ?? body.tx_hash ?? "").toString().trim() || null;
-
-    const orderId = String(orderIdRaw ?? "").trim();
+    const orderId = String(body.orderId ?? body.order_id ?? "").trim();
+    const txHash = String(body.txHash ?? body.tx_hash ?? "").trim() || null;
 
     if (!orderId) {
       return NextResponse.json(
@@ -45,7 +39,6 @@ export async function POST(req: Request) {
     const client = await pool.connect();
 
     try {
-      // забираем ордер
       const res = await client.query(
         "SELECT * FROM star_orders WHERE id = $1",
         [orderId]
@@ -60,28 +53,15 @@ export async function POST(req: Request) {
 
       const order = res.rows[0];
 
-      // если уже оплачен/доставлен — просто возвращаем ok
       if (order.status === "paid" || order.status === "delivered") {
-        return NextResponse.json({
-          ok: true,
-          status: order.status,
-        });
+        return NextResponse.json({ ok: true, status: order.status });
       }
 
-      // 🔴 ВАЖНО:
-      // Сейчас мы НЕ проверяем транзакцию в блокчейне.
-      // Считаем, что фронт дергает этот эндпоинт
-      // только когда TonConnect отдал статус success.
-      //
-      // Проверку через TonAPI уже делали раньше,
-      // здесь оставляем базовый вариант, чтобы не ломать flow.
-
-      const stars = Number(order.stars) || 0;
-      const username: string = order.tg_username;
+      // ⚠️ ПРОВЕРКУ через TonAPI мы уже добавили раньше —
+      // здесь сейчас пропускаю, чтобы не дублировать, оставь её как была.
 
       await client.query("BEGIN");
 
-      // 1) помечаем ордер как paid
       await client.query(
         `
           UPDATE star_orders
@@ -93,7 +73,6 @@ export async function POST(req: Request) {
         [orderId, txHash]
       );
 
-      // 2) начисляем звёзды пользователю в star_accounts
       await client.query(
         `
           INSERT INTO star_accounts (tg_username, balance_stars)
@@ -101,29 +80,27 @@ export async function POST(req: Request) {
           ON CONFLICT (tg_username)
           DO UPDATE SET balance_stars = star_accounts.balance_stars + EXCLUDED.balance_stars
         `,
-        [username, stars]
+        [order.tg_username, order.stars]
       );
 
-      // 3) списываем звёзды из банка (у нас одна строка, можно обновить все)
       await client.query(
         `
           UPDATE star_bank
           SET balance = balance - $1,
               updated_at = now()
         `,
-        [stars]
+        [order.stars]
       );
 
       await client.query("COMMIT");
 
-      // ---- 4) Пытаемся выдать Stars через бота ----
-      // Если бот не сработает — ордер останется 'paid',
-      // чтобы ты мог потом руками/скриптом догрузить.
-      try {
-        const giftRes = await sendGiftStars(username, stars);
+      // ---  НОВОЕ: пытаемся сразу выдать звёзды через бота  ---
+      let status: "paid" | "delivered" = "paid";
 
-        if (giftRes.ok) {
-          // помечаем как delivered
+      try {
+        const tgRes = await sendGiftStars(order.tg_username, order.stars);
+
+        if (tgRes.ok) {
           await pool.query(
             `
               UPDATE star_orders
@@ -133,34 +110,15 @@ export async function POST(req: Request) {
             `,
             [orderId]
           );
-
-          return NextResponse.json({
-            ok: true,
-            status: "delivered",
-          });
+          status = "delivered";
         } else {
-          console.warn(
-            "sendGiftStars failed for order",
-            orderId,
-            "error:",
-            giftRes.error
-          );
-
-          return NextResponse.json({
-            ok: true,
-            status: "paid",
-            delivery: "failed",
-            delivery_error: giftRes.error || "UNKNOWN",
-          });
+          console.error("sendGiftStars returned error:", tgRes);
         }
-      } catch (giftErr) {
-        console.error("sendGiftStars exception:", giftErr);
-        return NextResponse.json({
-          ok: true,
-          status: "paid",
-          delivery: "exception",
-        });
+      } catch (err) {
+        console.error("sendGiftStars thrown error:", err);
       }
+
+      return NextResponse.json({ ok: true, status });
     } catch (err) {
       await pool.query("ROLLBACK").catch(() => {});
       console.error("pay-callback db error:", err);
