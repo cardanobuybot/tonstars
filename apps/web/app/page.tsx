@@ -275,7 +275,7 @@ export default function Page() {
       {/* CARD */}
       <div
         style={{
-          // сделал карточку светлее и чуть контрастнее фона
+          // карточка светлее и контрастнее
           background: 'linear-gradient(180deg,#171c25,#10141c)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 20,
@@ -510,4 +510,3 @@ export default function Page() {
     </div>
   );
 }
-```0
