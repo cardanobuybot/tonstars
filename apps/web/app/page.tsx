@@ -7,8 +7,11 @@ import {
   useTonWallet
 } from '@tonconnect/ui-react';
 
-// временный курс (как и раньше)
+// временный курс
 const STAR_TON_RATE = 0.0002;
+
+// готовые пакеты звёзд, как на Fragment
+const STAR_PACKS = [50, 100, 250, 500, 1000];
 
 const texts = {
   ru: {
@@ -16,11 +19,11 @@ const texts = {
     sub: 'Быстро. Без KYC. Прозрачно.',
     buyCardTitle: 'Купить Stars',
     usernameLabel: 'Telegram юзернейм пользователя:',
-    usernamePh: '@username',
-    usernameHint: 'Латиница/цифры/_.',
+    usernamePh: 'username без @',
+    usernameHint: 'Введите ник без @.',
     amountLabel: 'Количество Stars:',
-    usernameErr: 'Ник: латиница/цифры/_ (4–32 символа)',
-    amountErr: 'Введите целое число ≥ 1',
+    usernameErr: 'Ник: латиница/цифры/_ (5–32)',
+    amountErr: 'Минимум 50 звёзд',
     toPay: 'К оплате (TON)',
     balance: 'Баланс (TON)',
     buy: 'Купить Stars',
@@ -41,11 +44,11 @@ const texts = {
     sub: 'Fast. No KYC. Transparent.',
     buyCardTitle: 'Buy Stars',
     usernameLabel: 'Telegram username:',
-    usernamePh: '@username',
-    usernameHint: 'Latin letters/digits/_.',
+    usernamePh: 'username without @',
+    usernameHint: 'Enter nickname without @.',
     amountLabel: 'Stars amount:',
-    usernameErr: 'Username: latin/digits/_ (4–32 chars)',
-    amountErr: 'Enter an integer ≥ 1',
+    usernameErr: 'Username: latin/digits/_ (5–32)',
+    amountErr: 'Minimum is 50 stars',
     toPay: 'To pay (TON)',
     balance: 'Balance (TON)',
     buy: 'Buy Stars',
@@ -78,7 +81,7 @@ export default function Page() {
 
   // форма
   const [username, setUsername] = useState('');
-  const [amountStr, setAmountStr] = useState('1');
+  const [selectedPack, setSelectedPack] = useState<number>(STAR_PACKS[0]);
 
   // статус процесса
   const [status, setStatus] = useState<StatusCode>('idle');
@@ -90,31 +93,23 @@ export default function Page() {
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
-  // очищенный ник: убираем пробелы и @
-  const cleanUsername = useMemo(
-    () => username.trim().replace(/^@/, ''),
+  // валидация юзернейма
+  const userOk = useMemo(
+    () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '').trim()),
     [username]
   );
 
-  // валидации ника — 4–32 символа
-  const userOk = useMemo(
-    () => /^[a-z0-9_]{4,32}$/i.test(cleanUsername),
-    [cleanUsername]
-  );
+  // количество звёзд определяется выбранным пакетом
+  const amountNum = selectedPack;
+  const amtOk = amountNum >= 50;
 
-  const amountNum = useMemo(() => {
-    const digits = amountStr.replace(/[^\d]/g, '');
-    const n = parseInt(digits || '0', 10);
-    return Number.isFinite(n) ? n : 0;
-  }, [amountStr]);
-
-  const amtOk = amountNum >= 1;
   const amountTon = useMemo(
     () => Number((amountNum * STAR_TON_RATE).toFixed(4)),
     [amountNum]
   );
 
-  const canBuy = userOk && amtOk && !!wallet;
+  // можно покупать, если юзернейм валиден и кошелёк подключён
+  const canBuy = userOk && !!wallet && amtOk;
 
   // подтягиваем баланс адреса
   useEffect(() => {
@@ -161,12 +156,12 @@ export default function Page() {
       setStatus('creating');
       setErrorDetails(null);
 
-      // 1) создаём ордер на бэке — отправляем уже очищенный ник
+      // 1) создаём ордер на бэке
       const createRes = await fetch('/api/order/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: cleanUsername,
+          username,
           stars: amountNum
         })
       });
@@ -241,8 +236,8 @@ export default function Page() {
   return (
     <div className="container safe-bottom" style={{ padding: '32px 16px 28px' }}>
       {/* HEADER */}
-      <div data-hdr style={{ marginBottom: 12 }}>
-        <div data-hdr-left>
+      <div data-hdr style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div data-hdr-left style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
           <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
             TonStars
@@ -275,11 +270,10 @@ export default function Page() {
       {/* CARD */}
       <div
         style={{
-          // карточка светлее и контрастнее
-          background: 'linear-gradient(180deg,#171c25,#10141c)',
-          border: '1px solid rgba(255,255,255,0.12)',
+          background: 'linear-gradient(180deg,#0f172a,#020617)',
+          border: '1px solid rgba(148,163,184,0.35)',
           borderRadius: 20,
-          boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+          boxShadow: '0 10px 40px rgba(15,23,42,0.85)',
           padding: 20,
           maxWidth: 840,
           margin: '0 auto'
@@ -302,7 +296,7 @@ export default function Page() {
           spellCheck={false}
           placeholder={t.usernamePh}
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={(e) => setUsername(e.target.value.trim())}
           className={
             username ? (userOk ? 'input-ok' : 'input-err') : undefined
           }
@@ -310,8 +304,8 @@ export default function Page() {
             width: '100%',
             height: 52,
             borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.12)',
-            background: '#111722',
+            border: '1px solid rgba(148,163,184,0.5)',
+            background: '#020617',
             padding: '0 14px',
             color: '#e6ebff',
             outline: 'none'
@@ -326,48 +320,61 @@ export default function Page() {
           </div>
         )}
 
-        {/* amount */}
+        {/* amount / пакеты */}
         <div style={{ height: 14 }} />
         <label
           style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
         >
           {t.amountLabel}
         </label>
-        <input
-          inputMode="numeric"
-          pattern="[0-9]*"
-          value={amountStr}
-          onChange={(e) => setAmountStr(e.target.value)}
-          className={
-            amountStr !== '' ? (amtOk ? 'input-ok' : 'input-err') : undefined
-          }
+
+        <div
           style={{
-            width: '100%',
-            height: 52,
-            borderRadius: 12,
-            border: '1px solid rgba(255,255,255,0.12)',
-            background: '#111722',
-            padding: '0 14px',
-            color: '#e6ebff',
-            outline: 'none'
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginBottom: 6
           }}
-        />
-        {amountStr !== '' && !amtOk && (
-          <div
-            className="err"
-            style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-          >
-            {t.amountErr}
-          </div>
-        )}
+        >
+          {STAR_PACKS.map((pack) => {
+            const active = selectedPack === pack;
+            return (
+              <button
+                key={pack}
+                type="button"
+                onClick={() => setSelectedPack(pack)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 999,
+                  border: active
+                    ? '1px solid rgba(22,227,201,0.9)'
+                    : '1px solid rgba(148,163,184,0.5)',
+                  background: active
+                    ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
+                    : 'rgba(15,23,42,0.9)',
+                  color: active ? '#001014' : '#e6ebff',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  cursor: 'pointer'
+                }}
+              >
+                {pack.toLocaleString('ru-RU')} Stars
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
+          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars
+        </div>
 
         {/* итоги */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            marginTop: 10,
-            marginBottom: 12,
+            marginTop: 4,
+            marginBottom: 10,
             fontSize: 16,
             opacity: 0.95
           }}
@@ -400,7 +407,7 @@ export default function Page() {
                 ? '#ff6b6b'
                 : isSuccess
                 ? '#4cd964'
-                : 'rgba(255,255,255,0.85)'
+                : 'rgba(255,255,255,0.8)'
             }}
           >
             {statusText}
@@ -411,24 +418,34 @@ export default function Page() {
         {/* кнопка */}
         <button
           onClick={onBuy}
-          disabled={!canBuy || status === 'creating' || status === 'opening_wallet'}
+          disabled={
+            !canBuy ||
+            status === 'creating' ||
+            status === 'opening_wallet'
+          }
           style={{
             width: '100%',
             height: 54,
             borderRadius: 14,
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid rgba(148,163,184,0.4)',
             background:
-              canBuy && status !== 'creating' && status !== 'opening_wallet'
+              canBuy &&
+              status !== 'creating' &&
+              status !== 'opening_wallet'
                 ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
-                : 'rgba(255,255,255,0.08)',
+                : 'rgba(30,41,59,0.8)',
             color:
-              canBuy && status !== 'creating' && status !== 'opening_wallet'
+              canBuy &&
+              status !== 'creating' &&
+              status !== 'opening_wallet'
                 ? '#001014'
-                : 'rgba(230,235,255,0.6)',
+                : 'rgba(226,232,240,0.7)',
             fontSize: 18,
             fontWeight: 800,
             cursor:
-              canBuy && status !== 'creating' && status !== 'opening_wallet'
+              canBuy &&
+              status !== 'creating' &&
+              status !== 'opening_wallet'
                 ? 'pointer'
                 : 'default'
           }}
@@ -444,7 +461,7 @@ export default function Page() {
           maxWidth: 840,
           margin: '28px auto 0',
           paddingTop: 16,
-          borderTop: '1px solid rgba(255,255,255,0.06)',
+          borderTop: '1px solid rgba(148,163,184,0.35)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -460,10 +477,10 @@ export default function Page() {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            background: '#10131a',
+            background: '#020617',
             padding: '2px 6px',
             borderRadius: 16,
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: '1px solid rgba(148,163,184,0.4)',
             transform: 'translateX(-16px)'
           }}
         >
@@ -473,7 +490,7 @@ export default function Page() {
             style={{
               padding: '4px 10px',
               borderRadius: 14,
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid rgba(148,163,184,0.5)',
               background: lang === 'ru' ? '#0098ea' : 'transparent',
               color: lang === 'ru' ? '#fff' : '#cdd6f4',
               fontWeight: 700
@@ -487,7 +504,7 @@ export default function Page() {
             style={{
               padding: '4px 10px',
               borderRadius: 14,
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid rgba(148,163,184,0.5)',
               background: lang === 'en' ? '#0098ea' : 'transparent',
               color: lang === 'en' ? '#fff' : '#cdd6f4',
               fontWeight: 700
