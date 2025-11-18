@@ -8,27 +8,123 @@ const pool = new Pool({
 });
 
 // кошелёк, куда прилетают оплаты
-const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET;
+// делаем строку, чтобы TypeScript не ныл
+const SERVICE_WALLET: string = process.env.TON_PAYMENT_WALLET || "";
 
-// просто чтобы в логах видеть, если забыли переменную
 if (!SERVICE_WALLET) {
   console.warn("TON_PAYMENT_WALLET is not set in environment");
+}
+
+/**
+ * Ищем входящую транзакцию на наш сервисный кошелёк
+ * через toncenter getTransactions.
+ * Проверяем:
+ *  - что есть входящее сообщение
+ *  - что сумма примерно равна ожидаемой (±1%)
+ *  - что транзакция свежая (меньше часа)
+ */
+async function findIncomingPayment(
+  expectedTon: number
+): Promise<{ ok: true; txHash: string } | { ok: false }> {
+  if (!SERVICE_WALLET) return { ok: false };
+
+  const url = `https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(
+    SERVICE_WALLET
+  )}&limit=20`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    console.error("toncenter getTransactions HTTP error", res.status);
+    return { ok: false };
+  }
+
+  const data = await res.json().catch((e) => {
+    console.error("toncenter getTransactions JSON error", e);
+    return null;
+  });
+
+  if (!data || !Array.isArray(data.result)) {
+    console.error("toncenter getTransactions: bad format", data);
+    return { ok: false };
+  }
+
+  const expectedNano = Math.round(expectedTon * 1e9);
+  const now = Math.floor(Date.now() / 1000);
+
+  for (const tx of data.result) {
+    const utime: number | undefined = tx.utime;
+    const inMsg = tx.in_msg || tx.in_msg_value || tx.in_message;
+    const valueStr: string | undefined =
+      inMsg?.value ?? inMsg?.amount ?? inMsg?.raw_value;
+
+    if (!utime || !valueStr) continue;
+
+    // свежесть: не старше часа
+    if (now - utime > 3600) continue;
+
+    const valueNano = Number(valueStr);
+    if (!Number.isFinite(valueNano)) continue;
+
+    // допуск ±1%
+    const diff = Math.abs(valueNano - expectedNano);
+    const tolerance = Math.floor(expectedNano * 0.01);
+
+    if (diff <= tolerance) {
+      const txHash: string =
+        tx.transaction_id?.hash ||
+        tx.hash ||
+        tx.tx_hash ||
+        "unknown_hash";
+
+      return { ok: true, txHash };
+    }
+  }
+
+  return { ok: false };
 }
 
 type PayCallbackBody = {
   orderId?: string;
   order_id?: string;
+
   txHash?: string;
   tx_hash?: string;
+  tonTxHash?: string;
+  ton_tx_hash?: string;
+
+  fromWallet?: string;
+  from_wallet?: string;
+  ton_wallet_addr?: string;
 };
 
 export async function POST(req: Request) {
   try {
+    if (!SERVICE_WALLET) {
+      return NextResponse.json(
+        { ok: false, error: "NO_SERVICE_WALLET" },
+        { status: 500 }
+      );
+    }
+
     const body = (await req.json()) as PayCallbackBody;
 
-    // поддерживаем оба варианта имён полей (camelCase и snake_case)
     const orderId = String(body.orderId ?? body.order_id ?? "").trim();
-    const txHash = String(body.txHash ?? body.tx_hash ?? "").trim() || null;
+    const txHashFromClient =
+      String(
+        body.txHash ??
+          body.tx_hash ??
+          body.tonTxHash ??
+          body.ton_tx_hash ??
+          ""
+      ).trim() || null;
+
+    const fromWallet =
+      String(
+        body.fromWallet ??
+          body.from_wallet ??
+          body.ton_wallet_addr ??
+          ""
+      ).trim() || null;
 
     if (!orderId) {
       return NextResponse.json(
@@ -53,22 +149,36 @@ export async function POST(req: Request) {
         );
       }
 
-      const order = res.rows[0];
+      const order = res.rows[0] as {
+        id: number;
+        tg_username: string;
+        stars: number;
+        ton_amount: number;
+        status: string;
+      };
 
-      // если уже оплачен/доставлен — просто возвращаем ok
+      // если уже оплачен/доставлен — просто возвращаем ок
       if (order.status === "paid" || order.status === "delivered") {
         return NextResponse.json({ ok: true, status: order.status });
       }
 
-      // 🔴 ВАЖНО:
-      // Сейчас мы НЕ проверяем транзакцию в блокчейне.
-      // Считаем, что фронт дергает этот эндпоинт
-      // только когда TonConnect отдал статус success.
-      // Проверку через TonAPI добавим на следующем шаге.
+      // 1) проверяем платёж через блокчейн (toncenter)
+      const verify = await findIncomingPayment(order.ton_amount);
 
+      if (!verify.ok) {
+        return NextResponse.json(
+          { ok: false, error: "PAYMENT_NOT_FOUND" },
+          { status: 400 }
+        );
+      }
+
+      const finalTxHash = txHashFromClient ?? verify.txHash;
+
+      // 2) транзакция в БД: пометить как paid,
+      //    начислить звёзды пользователю, списать из банка
       await client.query("BEGIN");
 
-      // 1) помечаем ордер как paid
+      // помечаем ордер как paid
       await client.query(
         `
           UPDATE star_orders
@@ -77,21 +187,22 @@ export async function POST(req: Request) {
               updated_at = now()
           WHERE id = $1
         `,
-        [orderId, txHash]
+        [orderId, finalTxHash]
       );
 
-      // 2) начисляем звёзды пользователю в star_accounts
+      // начисляем звёзды пользователю
       await client.query(
         `
           INSERT INTO star_accounts (tg_username, balance_stars)
           VALUES ($1, $2)
           ON CONFLICT (tg_username)
-          DO UPDATE SET balance_stars = star_accounts.balance_stars + EXCLUDED.balance_stars
+          DO UPDATE
+          SET balance_stars = star_accounts.balance_stars + EXCLUDED.balance_stars
         `,
         [order.tg_username, order.stars]
       );
 
-      // 3) списываем звёзды из банка (у нас одна строка, можно обновить все)
+      // списываем из star_bank
       await client.query(
         `
           UPDATE star_bank
@@ -103,7 +214,12 @@ export async function POST(req: Request) {
 
       await client.query("COMMIT");
 
-      return NextResponse.json({ ok: true });
+      return NextResponse.json({
+        ok: true,
+        status: "paid",
+        tx_hash: finalTxHash,
+        from_wallet: fromWallet
+      });
     } catch (err) {
       await pool.query("ROLLBACK").catch(() => {});
       console.error("pay-callback db error:", err);
