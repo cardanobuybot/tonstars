@@ -30,7 +30,7 @@ const PRICE_PER_STAR = Number(
 );
 
 // готовые пакеты звёзд
-const STAR_PACKS = [50, 100, 250, 500, 1000];
+const STAR_PACKS = [50, 100, 250, 500, 1000, 5000];
 
 // тексты
 const texts: Record<
