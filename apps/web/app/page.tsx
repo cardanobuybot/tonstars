@@ -109,9 +109,11 @@ const texts: Record<
 export default function Page() {
   const [lang, setLang] = useState<Lang>('ru');
   const t = texts[lang];
-  
+
+  // локаль для форматирования чисел и подпись "Выбрано / Selected"
   const numberLocale = lang === 'ru' ? 'ru-RU' : 'en-US';
   const selectedLabel = lang === 'ru' ? 'Выбрано' : 'Selected';
+
   // ссылки на политику/условия в зависимости от языка
   const privacyHref = lang === 'ru' ? '/privacy' : '/en/privacy';
   const termsHref = lang === 'ru' ? '/terms' : '/en/terms';
@@ -409,14 +411,15 @@ export default function Page() {
                   cursor: 'pointer'
                 }}
               >
-                {pack.toLocaleString('ru-RU')} Stars
+                {pack.toLocaleString(numberLocale)} Stars
               </button>
             );
           })}
         </div>
 
         <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
-          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars{' '}
+          {selectedLabel}:{' '}
+          {amountNum.toLocaleString(numberLocale)} Stars{' '}
           {' · '}
           1 Star ≈ {PRICE_PER_STAR.toFixed(6)} TON
         </div>
