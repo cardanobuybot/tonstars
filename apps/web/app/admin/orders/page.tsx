@@ -21,7 +21,10 @@ const ADMIN_STORAGE_KEY = 'ts_admin_key';
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<StatusFilter>('open');
+
+  // 🔹 по умолчанию показываем ВСЕ заказы
+  const [filter, setFilter] = useState<StatusFilter>('all');
+
   const [error, setError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
@@ -45,7 +48,7 @@ export default function AdminOrdersPage() {
         `/api/admin/orders?status=${encodeURIComponent(currentFilter)}`,
         {
           headers: {
-            'x-admin-token': k, // важно: совпадает с route.ts
+            'x-admin-token': k,
           },
         },
       );
@@ -81,7 +84,8 @@ export default function AdminOrdersPage() {
     if (saved) {
       setAdminKey(saved);
       setIsAuthed(true);
-      loadOrders('open', saved).catch(() => {});
+      // 🔹 при автологине тоже сразу грузим "all"
+      loadOrders('all', saved).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -100,7 +104,8 @@ export default function AdminOrdersPage() {
       setLoginLoading(true);
       setError(null);
 
-      const res = await fetch('/api/admin/orders?status=open', {
+      // 🔹 при логине тоже сразу просим "all"
+      const res = await fetch('/api/admin/orders?status=all', {
         headers: {
           'x-admin-token': trimmed,
         },
@@ -118,7 +123,7 @@ export default function AdminOrdersPage() {
 
       setIsAuthed(true);
       setOrders(data.orders ?? []);
-      setFilter('open');
+      setFilter('all'); // 🔹 вкладка "Все"
     } catch (err) {
       console.error('login error:', err);
       setError('Неверный админ-пароль');
@@ -451,7 +456,7 @@ export default function AdminOrdersPage() {
                     textAlign: 'right',
                     fontVariantNumeric: 'tabular-nums',
                     paddingRight: 12,
-                    whiteSpace: 'nowrap'// ← отступ справа от TON
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {tonFormatted}
@@ -460,7 +465,7 @@ export default function AdminOrdersPage() {
                   style={{
                     textTransform: 'lowercase',
                     paddingLeft: 12,
-                    whiteSpace: 'nowrap'// ← отступ слева у status
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {o.status}
