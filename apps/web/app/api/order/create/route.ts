@@ -1,50 +1,24 @@
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
 
+// DB pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// ------------------------
-//  КУРС ЗВЁЗД
-// ------------------------
-//
-// В Vercel Environment должны быть:
-//
-// NEXT_PUBLIC_BASE_STAR_RATE=0.008556   // 1 Star по Fragment
-// NEXT_PUBLIC_MARKUP_PERCENT=3          // твоя наценка в %
-//
-// Эти переменные доступны и на сервере.
-const RAW_BASE = Number(process.env.NEXT_PUBLIC_BASE_STAR_RATE || "0.008556");
-const RAW_MARKUP = Number(process.env.NEXT_PUBLIC_MARKUP_PERCENT || "3");
-
-// Защита от кривых значений
-const BASE_RATE =
-  Number.isFinite(RAW_BASE) && RAW_BASE > 0 ? RAW_BASE : 0.008556;
-const MARKUP =
-  Number.isFinite(RAW_MARKUP) && RAW_MARKUP >= 0 ? RAW_MARKUP : 3;
-
-// Итоговый курс 1 Star в TON с учётом наценки.
-// Пример: 0.008556 * 1.03 = 0.008812
-const STAR_TON_RATE = Number(
-  (BASE_RATE * (1 + MARKUP / 100)).toFixed(6)
-);
-
-console.log(
-  "[TonStars] STAR_TON_RATE:",
-  STAR_TON_RATE,
-  "(base=",
-  BASE_RATE,
-  "markup=",
-  MARKUP,
-  "%)"
-);
-
-// Кошелёк, куда летят TON за заказ
+// читаем ENV
+const BASE_RATE = Number(process.env.NEXT_PUBLIC_BASE_STAR_RATE || "0.008556"); // TON за 1 звезду
+const MARKUP_PERCENT = Number(process.env.NEXT_PUBLIC_MARKUP_PERCENT || "3");   // %
 const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET;
+
 if (!SERVICE_WALLET) {
-  console.warn("[TonStars] TON_PAYMENT_WALLET is NOT set!");
+  console.warn("TON_PAYMENT_WALLET is NOT set!");
+}
+
+// итоговая цена за 1 звезду TON
+function calcPricePerStar() {
+  return Number((BASE_RATE * (1 + MARKUP_PERCENT / 100)).toFixed(8));
 }
 
 type CreateOrderBody = {
@@ -59,76 +33,64 @@ export async function POST(req: Request) {
     const rawUsername = String(body.username || "").trim();
     const stars = Number(body.stars);
 
-    // username можно с @ или без → нормализуем
-    const norm = rawUsername.replace(/^@/, "").toLowerCase();
+    if (!rawUsername) {
+      return NextResponse.json(
+        { ok: false, error: "NO_USERNAME" },
+        { status: 400 }
+      );
+    }
 
-    // допускаем 4–32 символа (как хотел)
-    if (!norm || !/^[a-z0-9_]{4,32}$/i.test(norm)) {
+    const clean = rawUsername.replace(/^@/, "").toLowerCase();
+
+    if (!/^[a-z0-9_]{4,32}$/i.test(clean)) {
       return NextResponse.json(
         { ok: false, error: "BAD_USERNAME" },
         { status: 400 }
       );
     }
 
-    // минимум 50 звёзд и целое число
-    if (!Number.isFinite(stars) || !Number.isInteger(stars) || stars < 50) {
+    if (!Number.isInteger(stars) || stars < 50) {
       return NextResponse.json(
-        { ok: false, error: "BAD_STARS_MIN_50" },
+        { ok: false, error: "BAD_STARS" },
         { status: 400 }
       );
     }
 
-    const username = norm;
-
-    // Считаем сумму в TON с твоей наценкой
-    const tonAmount = Number((stars * STAR_TON_RATE).toFixed(4));
-
-    if (!SERVICE_WALLET) {
-      return NextResponse.json(
-        { ok: false, error: "NO_SERVICE_WALLET" },
-        { status: 500 }
-      );
-    }
+    // пересчитываем цену — всегда одинаково с фронтом
+    const pricePerStar = calcPricePerStar();
+    const tonAmount = Number((stars * pricePerStar).toFixed(4));
 
     const client = await pool.connect();
-    let orderId: string;
+    let orderId: number;
 
     try {
       const res = await client.query(
         `
-          INSERT INTO star_orders (
-            tg_username,
-            stars,
-            ton_amount,
-            ton_wallet_addr,
-            status
-          )
-          VALUES ($1, $2, $3, $4, 'pending')
-          RETURNING id
-        `,
-        [username, stars, tonAmount, SERVICE_WALLET]
+        INSERT INTO star_orders (
+          tg_username,
+          stars,
+          ton_amount,
+          ton_wallet_addr,
+          status
+        )
+        VALUES ($1, $2, $3, $4, 'pending')
+        RETURNING id
+      `,
+        [clean, stars, tonAmount, SERVICE_WALLET]
       );
 
-      orderId = String(res.rows[0].id);
+      orderId = res.rows[0].id;
     } finally {
       client.release();
     }
-
-    const comment = `order:${orderId};user:@${username};stars:${stars}`;
 
     return NextResponse.json({
       ok: true,
       order_id: orderId,
       to_address: SERVICE_WALLET,
-      ton_amount: tonAmount,
-      comment,
-      meta: {
-        base_rate: BASE_RATE,
-        markup_percent: MARKUP,
-        star_rate: STAR_TON_RATE
-      }
+      ton_amount: tonAmount
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error("order/create error:", err);
     return NextResponse.json(
       { ok: false, error: "SERVER_ERROR" },
