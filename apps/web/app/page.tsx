@@ -4,21 +4,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   TonConnectButton,
   useTonConnectUI,
-  useTonWallet,
+  useTonWallet
 } from '@tonconnect/ui-react';
 
-// Цена 50 звёзд (TON) с твоей наценкой, берём из env.
-// Например: NEXT_PUBLIC_STAR_PACK_50_TON = 0.4416
-const PACK50_TON_RAW = process.env.NEXT_PUBLIC_STAR_PACK_50_TON || '0.44';
-const PACK50_TON = Number(PACK50_TON_RAW);
+// читаем переменные из Vercel
+const BASE_RATE = Number(process.env.NEXT_PUBLIC_BASE_STAR_RATE || '0.008556');
+const MARKUP_PERCENT = Number(process.env.NEXT_PUBLIC_MARKUP_PERCENT || '3');
 
-// если вдруг env не число – fallback, чтобы не было NaN
-const SAFE_PACK50_TON = Number.isFinite(PACK50_TON) ? PACK50_TON : 0.44;
+// итоговая цена 1 звезды с учётом наценки
+const PRICE_PER_STAR = Number(
+  (BASE_RATE * (1 + MARKUP_PERCENT / 100)).toFixed(8)
+);
 
-// сколько TON за одну звезду
-const STAR_TON_RATE = SAFE_PACK50_TON / 50;
-
-// готовые пакеты звёзд, как на Fragment
+// пакеты звёзд
 const STAR_PACKS = [50, 100, 250, 500, 1000];
 
 const texts = {
@@ -27,7 +25,7 @@ const texts = {
     sub: 'Быстро. Без KYC. Прозрачно.',
     buyCardTitle: 'Купить Stars',
     usernameLabel: 'Telegram юзернейм пользователя:',
-    usernamePh: 'username (можно с @ или без)',
+    usernamePh: 'username',
     usernameHint: 'Можно вводить ник с @ или без — мы обработаем сами.',
     amountLabel: 'Количество Stars:',
     usernameErr: 'Ник: латиница/цифры/_ (5–32)',
@@ -44,34 +42,9 @@ const texts = {
       opening_wallet: 'Открываем кошелёк…',
       waiting_confirm: 'Транзакция отправлена, ждём подтверждения…',
       paid: 'Оплата получена, скоро звёзды будут начислены.',
-      error: 'Ошибка при создании заказа.',
-    },
-  },
-  en: {
-    hero: 'Buy Telegram Stars with TON',
-    sub: 'Fast. No KYC. Transparent.',
-    buyCardTitle: 'Buy Stars',
-    usernameLabel: 'Telegram username:',
-    usernamePh: 'username (with or without @)',
-    usernameHint: 'You can enter it with @ or without — we handle both.',
-    amountLabel: 'Stars amount:',
-    usernameErr: 'Username: latin/digits/_ (5–32)',
-    amountErr: 'Minimum is 50 stars',
-    toPay: 'To pay (TON)',
-    balance: 'Balance (TON)',
-    buy: 'Buy Stars',
-    policy: 'Privacy',
-    terms: 'Terms',
-    yearLine: '© 2025 TonStars',
-    status: {
-      idle: '',
-      creating: 'Creating order…',
-      opening_wallet: 'Opening wallet…',
-      waiting_confirm: 'Transaction sent, waiting for confirmation…',
-      paid: 'Payment received, stars will be delivered soon.',
-      error: 'Error while creating order.',
-    },
-  },
+      error: 'Ошибка при создании заказа.'
+    }
+  }
 };
 
 type Lang = 'ru' | 'en';
@@ -101,33 +74,32 @@ export default function Page() {
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
-  // валидация юзернейма (отрезаем @ перед проверкой)
+  // валидация юзернейма
   const userOk = useMemo(
     () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '').trim()),
-    [username],
+    [username]
   );
 
-  // количество звёзд определяется выбранным пакетом
+  // количество звёзд из выбранного пакета
   const amountNum = selectedPack;
   const amtOk = amountNum >= 50;
 
-  // считаем сумму в TON по актуальному (для фронта) курсу
+  // вычисляем финальную сумму с учетом пакета
   const amountTon = useMemo(
-    () => Number((amountNum * STAR_TON_RATE).toFixed(4)),
-    [amountNum],
+    () => Number((amountNum * PRICE_PER_STAR).toFixed(4)),
+    [amountNum]
   );
 
-  // можно покупать, если юзернейм валиден и кошелёк подключён
   const canBuy = userOk && !!wallet && amtOk;
 
-  // подтягиваем баланс адреса
+  // подтягиваем баланс кошелька
   useEffect(() => {
     let aborted = false;
 
     async function fetchBalance(addr: string) {
       try {
         const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(
-          addr,
+          addr
         )}`;
         const r = await fetch(url);
         const j = await r.json();
@@ -152,7 +124,7 @@ export default function Page() {
     };
   }, [addressFriendly]);
 
-  // основной flow покупки
+  // покупка
   const onBuy = async () => {
     if (!canBuy) return;
     if (!wallet) {
@@ -165,14 +137,13 @@ export default function Page() {
       setStatus('creating');
       setErrorDetails(null);
 
-      // 1) создаём ордер на бэке
       const createRes = await fetch('/api/order/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
-          stars: amountNum,
-        }),
+          stars: amountNum
+        })
       });
 
       const createData = await createRes.json();
@@ -181,41 +152,34 @@ export default function Page() {
         throw new Error(createData?.error || 'ORDER_CREATE_FAILED');
       }
 
-      const orderId: number = createData.order_id;
-      const toAddress: string = createData.to_address;
-      const tonAmount: number = createData.ton_amount;
+      const orderId = createData.order_id;
+      const toAddress = createData.to_address;
+      const tonAmount = createData.ton_amount;
 
       setStatus('opening_wallet');
 
-      // 2) отправляем транзакцию через TonConnect
       const nanoAmount = Math.round(tonAmount * 1e9);
+
       const tx = {
         validUntil: Math.floor(Date.now() / 1000) + 300,
-        messages: [
-          {
-            address: toAddress,
-            amount: nanoAmount.toString(),
-          },
-        ],
+        messages: [{ address: toAddress, amount: nanoAmount.toString() }]
       };
 
-      const txResult: any = await tonConnectUI.sendTransaction(tx);
+      const txResult = await tonConnectUI.sendTransaction(tx);
 
-      // если дошли сюда — кошелёк не отменил отправку
       setStatus('waiting_confirm');
 
       const tonTxBoc = txResult?.boc || null;
       const fromAddr = wallet.account.address;
 
-      // 3) дергаем callback, чтобы пометить ордер как paid
       const cbRes = await fetch('/api/pay-callback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           order_id: orderId,
           ton_tx_hash: tonTxBoc,
-          ton_wallet_addr: fromAddr,
-        }),
+          ton_wallet_addr: fromAddr
+        })
       });
 
       const cbData = await cbRes.json();
@@ -238,299 +202,65 @@ export default function Page() {
 
   const statusText = t.status[status];
   const showStatus = !!statusText;
-  const isError = status === 'error';
-  const isSuccess = status === 'paid';
+
+  // ===== UI =====
 
   return (
-    <div className="container safe-bottom" style={{ padding: '32px 16px 28px' }}>
-      {/* HEADER */}
-      <div
-        data-hdr
-        style={{
-          marginBottom: 12,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <div
-          data-hdr-left
-          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-        >
-          <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
-            TonStars
-          </div>
-        </div>
-        <div data-hdr-right>
-          <div data-tc-button>
-            <TonConnectButton />
-          </div>
+    <div className="container" style={{ padding: '32px 16px 28px' }}>
+      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <h1>TonStars</h1>
+        <div style={{ opacity: 0.6 }}>{t.sub}</div>
+        <TonConnectButton />
+      </div>
+
+      {/* выбор пакетов */}
+      <div>
+        <label>{t.amountLabel}</label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {STAR_PACKS.map((p) => (
+            <button
+              key={p}
+              onClick={() => setSelectedPack(p)}
+              style={{
+                padding: '8px 14px',
+                borderRadius: 999,
+                border: selectedPack === p
+                  ? '1px solid #16e3c9'
+                  : '1px solid #666',
+                background: selectedPack === p
+                  ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
+                  : '#111',
+                color: '#fff'
+              }}
+            >
+              {p} Stars
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* HERO */}
-      <h1
-        style={{
-          margin: '28px auto 8px',
-          fontSize: 36,
-          lineHeight: 1.1,
-          letterSpacing: 0.2,
-          textAlign: 'center',
-          maxWidth: 680,
-        }}
-      >
-        {t.hero}
-      </h1>
-      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>
-        {t.sub}
+      {/* итог */}
+      <div style={{ marginTop: 20, fontSize: 18 }}>
+        <b>{t.toPay}</b>: {amountTon} TON  
+        <br />
+        <small>(1 Star = {PRICE_PER_STAR} TON)</small>
       </div>
 
-      {/* CARD */}
-      <div
+      {/* кнопка */}
+      <button
+        onClick={onBuy}
+        disabled={!canBuy}
         style={{
-          background: 'linear-gradient(180deg,#0f172a,#020617)',
-          border: '1px solid rgba(148,163,184,0.35)',
-          borderRadius: 20,
-          boxShadow: '0 10px 40px rgba(15,23,42,0.85)',
-          padding: 20,
-          maxWidth: 840,
-          margin: '0 auto',
+          marginTop: 24,
+          width: '100%',
+          height: 52,
+          fontSize: 20,
+          borderRadius: 12,
+          background: 'linear-gradient(90deg,#2a86ff,#16e3c9)'
         }}
       >
-        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
-          {t.buyCardTitle}
-        </div>
-
-        {/* username */}
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-          {t.usernameLabel}
-        </label>
-        <input
-          inputMode="text"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder={t.usernamePh}
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className={username ? (userOk ? 'input-ok' : 'input-err') : undefined}
-          style={{
-            width: '100%',
-            height: 52,
-            borderRadius: 12,
-            border: '1px solid rgba(148,163,184,0.5)',
-            background: '#020617',
-            padding: '0 14px',
-            color: '#e6ebff',
-            outline: 'none',
-          }}
-        />
-        {(!username || !userOk) && (
-          <div
-            className={username && !userOk ? 'err' : undefined}
-            style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-          >
-            {username ? t.usernameErr : t.usernameHint}
-          </div>
-        )}
-
-        {/* amount / пакеты */}
-        <div style={{ height: 14 }} />
-        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
-          {t.amountLabel}
-        </label>
-
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            marginBottom: 6,
-          }}
-        >
-          {STAR_PACKS.map((pack) => {
-            const active = selectedPack === pack;
-            return (
-              <button
-                key={pack}
-                type="button"
-                onClick={() => setSelectedPack(pack)}
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: 999,
-                  border: active
-                    ? '1px solid rgba(22,227,201,0.9)'
-                    : '1px solid rgba(148,163,184,0.5)',
-                  background: active
-                    ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
-                    : 'rgba(15,23,42,0.9)',
-                  color: active ? '#001014' : '#e6ebff',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                }}
-              >
-                {pack.toLocaleString('ru-RU')} Stars
-              </button>
-            );
-          })}
-        </div>
-
-        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
-          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars
-        </div>
-
-        {/* итоги */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginTop: 4,
-            marginBottom: 10,
-            fontSize: 16,
-            opacity: 0.95,
-          }}
-        >
-          <div>{t.toPay}</div>
-          <div>≈ {amountTon.toFixed(4)} TON</div>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginTop: 4,
-            marginBottom: 8,
-            fontSize: 16,
-            opacity: 0.85,
-          }}
-        >
-          <div>{t.balance}</div>
-          <div>
-            {balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}
-          </div>
-        </div>
-
-        {/* статус процесса */}
-        {showStatus && (
-          <div
-            style={{
-              fontSize: 14,
-              marginBottom: 10,
-              color: isError
-                ? '#ff6b6b'
-                : isSuccess
-                ? '#4cd964'
-                : 'rgba(255,255,255,0.8)',
-            }}
-          >
-            {statusText}
-            {isError && errorDetails ? ` (${errorDetails})` : null}
-          </div>
-        )}
-
-        {/* кнопка */}
-        <button
-          onClick={onBuy}
-          disabled={
-            !canBuy || status === 'creating' || status === 'opening_wallet'
-          }
-          style={{
-            width: '100%',
-            height: 54,
-            borderRadius: 14,
-            border: '1px solid rgba(148,163,184,0.4)',
-            background:
-              canBuy && status !== 'creating' && status !== 'opening_wallet'
-                ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
-                : 'rgba(30,41,59,0.8)',
-            color:
-              canBuy && status !== 'creating' && status !== 'opening_wallet'
-                ? '#001014'
-                : 'rgba(226,232,240,0.7)',
-            fontSize: 18,
-            fontWeight: 800,
-            cursor:
-              canBuy && status !== 'creating' && status !== 'opening_wallet'
-                ? 'pointer'
-                : 'default',
-          }}
-        >
-          {t.buy}
-        </button>
-      </div>
-
-      {/* BOTTOM BAR */}
-      <div
-        className="bottom-bar"
-        style={{
-          maxWidth: 840,
-          margin: '28px auto 0',
-          paddingTop: 16,
-          borderTop: '1px solid rgba(148,163,184,0.35)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 20,
-          flexWrap: 'wrap',
-          opacity: 0.9,
-          fontSize: 15,
-        }}
-      >
-        <div
-          className="lang-pill"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            background: '#020617',
-            padding: '2px 6px',
-            borderRadius: 16,
-            border: '1px solid rgba(148,163,184,0.4)',
-            transform: 'translateX(-16px)',
-          }}
-        >
-          <button
-            onClick={() => setLang('ru')}
-            aria-label="RU"
-            style={{
-              padding: '4px 10px',
-              borderRadius: 14,
-              border: '1px solid rgba(148,163,184,0.5)',
-              background: lang === 'ru' ? '#0098ea' : 'transparent',
-              color: lang === 'ru' ? '#fff' : '#cdd6f4',
-              fontWeight: 700,
-            }}
-          >
-            RU
-          </button>
-          <button
-            onClick={() => setLang('en')}
-            aria-label="EN"
-            style={{
-              padding: '4px 10px',
-              borderRadius: 14,
-              border: '1px solid rgba(148,163,184,0.5)',
-              background: lang === 'en' ? '#0098ea' : 'transparent',
-              color: lang === 'en' ? '#fff' : '#cdd6f4',
-              fontWeight: 700,
-            }}
-          >
-            EN
-          </button>
-        </div>
-
-        <a href="/privacy" className="foot-link">
-          {t.policy}
-        </a>
-        <span className="foot-sep">|</span>
-        <a href="/terms" className="foot-link">
-          {t.terms}
-        </a>
-        <span className="foot-sep">|</span>
-        <span className="foot-mute">{t.yearLine}</span>
-      </div>
+        {t.buy}
+      </button>
     </div>
   );
 }
