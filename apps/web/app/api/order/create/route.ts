@@ -6,8 +6,13 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-const STAR_TON_RATE = 0.0002;
+// =========================
+// Динамический курс ⭐ → TON
+// =========================
+const STAR_TON_RATE = Number(process.env.NEXT_PUBLIC_STAR_TON_RATE || "0.0085");
+// пример: 1 звезда ≈ 0.008556 TON
 
+// Кошелёк для получения TON
 const SERVICE_WALLET = process.env.TON_PAYMENT_WALLET;
 if (!SERVICE_WALLET) {
   console.warn("TON_PAYMENT_WALLET is NOT set!");
@@ -25,16 +30,27 @@ export async function POST(req: Request) {
     const rawUsername = String(body.username || "").trim();
     const stars = Number(body.stars);
 
+    // username validation
     if (!rawUsername || !/^[a-z0-9_]{4,32}$/i.test(rawUsername.replace(/^@/, ""))) {
-      return NextResponse.json({ ok: false, error: "BAD_USERNAME" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "BAD_USERNAME" },
+        { status: 400 }
+      );
     }
 
+    // stars validation
     if (!Number.isFinite(stars) || stars < 1 || !Number.isInteger(stars)) {
-      return NextResponse.json({ ok: false, error: "BAD_STARS" }, { status: 400 });
+      return NextResponse.json(
+        { ok: false, error: "BAD_STARS" },
+        { status: 400 }
+      );
     }
 
     const username = rawUsername.replace(/^@/, "").toLowerCase();
 
+    // ========================
+    // ТОН К ОПЛАТЕ
+    // ========================
     const tonAmount = Number((stars * STAR_TON_RATE).toFixed(4));
 
     const client = await pool.connect();
@@ -43,18 +59,19 @@ export async function POST(req: Request) {
     try {
       const res = await client.query(
         `
-        INSERT INTO star_orders (
-          tg_username,
-          stars,
-          ton_amount,
-          ton_wallet_addr,
-          status
-        )
-        VALUES ($1, $2, $3, $4, 'pending')
-        RETURNING id
-      `,
+          INSERT INTO star_orders (
+            tg_username,
+            stars,
+            ton_amount,
+            ton_wallet_addr,
+            status
+          )
+          VALUES ($1, $2, $3, $4, 'pending')
+          RETURNING id
+        `,
         [username, stars, tonAmount, SERVICE_WALLET]
       );
+
       orderId = String(res.rows[0].id);
     } finally {
       client.release();
