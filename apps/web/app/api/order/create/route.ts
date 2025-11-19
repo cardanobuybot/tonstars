@@ -7,19 +7,19 @@ const pool = new Pool({
 });
 
 // ------------------------
-//  КУРС ЗВЕЗД
+//  КУРС ЗВЁЗД
 // ------------------------
 //
-// В .env / Vercel уже должны быть:
+// В Vercel Environment должны быть:
 //
 // NEXT_PUBLIC_BASE_STAR_RATE=0.008556   // 1 Star по Fragment
 // NEXT_PUBLIC_MARKUP_PERCENT=3          // твоя наценка в %
 //
-// Важно: эти переменные доступны и на сервере.
+// Эти переменные доступны и на сервере.
 const RAW_BASE = Number(process.env.NEXT_PUBLIC_BASE_STAR_RATE || "0.008556");
 const RAW_MARKUP = Number(process.env.NEXT_PUBLIC_MARKUP_PERCENT || "3");
 
-// Немного защиты от кривых значений:
+// Защита от кривых значений
 const BASE_RATE =
   Number.isFinite(RAW_BASE) && RAW_BASE > 0 ? RAW_BASE : 0.008556;
 const MARKUP =
@@ -27,7 +27,7 @@ const MARKUP =
 
 // Итоговый курс 1 Star в TON с учётом наценки.
 // Пример: 0.008556 * 1.03 = 0.008812
-export const STAR_TON_RATE = Number(
+const STAR_TON_RATE = Number(
   (BASE_RATE * (1 + MARKUP / 100)).toFixed(6)
 );
 
@@ -59,9 +59,10 @@ export async function POST(req: Request) {
     const rawUsername = String(body.username || "").trim();
     const stars = Number(body.stars);
 
-    // username можно с @ или без, приводим к нижнему регистру
+    // username можно с @ или без → нормализуем
     const norm = rawUsername.replace(/^@/, "").toLowerCase();
 
+    // допускаем 4–32 символа (как хотел)
     if (!norm || !/^[a-z0-9_]{4,32}$/i.test(norm)) {
       return NextResponse.json(
         { ok: false, error: "BAD_USERNAME" },
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Защита: минимум 50 звёзд и целое число
+    // минимум 50 звёзд и целое число
     if (!Number.isFinite(stars) || !Number.isInteger(stars) || stars < 50) {
       return NextResponse.json(
         { ok: false, error: "BAD_STARS_MIN_50" },
@@ -113,7 +114,6 @@ export async function POST(req: Request) {
       client.release();
     }
 
-    // Коммент — пока просто для дебага (можно не использовать)
     const comment = `order:${orderId};user:@${username};stars:${stars}`;
 
     return NextResponse.json({
@@ -122,7 +122,6 @@ export async function POST(req: Request) {
       to_address: SERVICE_WALLET,
       ton_amount: tonAmount,
       comment,
-      // отдаём ещё служебную инфу (на будущее, на фронте можно показать)
       meta: {
         base_rate: BASE_RATE,
         markup_percent: MARKUP,
