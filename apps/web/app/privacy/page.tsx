@@ -1,186 +1,160 @@
-export const metadata = {
-  title: "Политика конфиденциальности / Privacy Policy — TonStars",
-  description: "Политика конфиденциальности / Privacy Policy for TonStars",
+// apps/web/app/privacy/page.tsx
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Политика конфиденциальности | TonStars',
+  description:
+    'Политика конфиденциальности сервиса TonStars — покупка Telegram Stars за TON без хранения средств пользователей.',
+  alternates: {
+    languages: {
+      ru: 'https://www.tonstars.io/privacy',
+      en: 'https://www.tonstars.io/en/privacy',
+      'x-default': 'https://www.tonstars.io/privacy',
+    },
+  },
 };
 
-export default function PrivacyPage() {
+export default function PrivacyRuPage() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10 text-neutral-200">
-      <h1 className="text-3xl font-semibold mb-6">
-        Политика конфиденциальности / Privacy Policy
+    <main
+      style={{
+        minHeight: '100vh',
+        padding: '32px 16px 40px',
+        maxWidth: 860,
+        margin: '0 auto',
+        color: '#e5edf5',
+      }}
+    >
+      <h1 style={{ fontSize: 32, marginBottom: 16 }}>
+        Политика конфиденциальности
       </h1>
+      <div style={{ opacity: 0.7, marginBottom: 24, fontSize: 14 }}>
+        Последнее обновление: 01.06.2025
+      </div>
 
-      {/* --- Russian Version --- */}
-      <section className="mb-12">
-        <h2 className="text-2xl font-semibold mb-3">
-          Политика конфиденциальности (RU)
-        </h2>
-        <p className="opacity-80 mb-4">Последнее обновление: 01.06.2025</p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">1. Введение</h3>
-        <p className="mb-3">
-          Эта Политика описывает обработку данных при использовании платформы{" "}
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>1. Введение</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Эта Политика описывает обработку данных при использовании платформы{' '}
           <strong>TonStars</strong>. Используя Платформу, вы соглашаетесь с её
           условиями.
         </p>
+      </section>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">2. Какие данные мы используем</h3>
-        <h4 className="font-semibold mt-4 mb-1">2.1. Данные аккаунта</h4>
-        <p className="mb-2">
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>2. Какие данные мы используем</h2>
+
+        <h3 style={{ fontSize: 16, marginTop: 12, marginBottom: 4 }}>
+          2.1. Данные аккаунта
+        </h3>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
           Возможен вход через Telegram или подключение TON-кошелька. Мы не
-          связываем эти данные и не храним IP/идентификаторы устройств.
-        </p>
-        <h4 className="font-semibold mt-4 mb-1">2.2. История транзакций</h4>
-        <p className="mb-2">
-          Все операции записываются в публичной сети TON. Средствами мы не
-          управляем.
-        </p>
-        <h4 className="font-semibold mt-4 mb-1">2.3. Анонимная статистика</h4>
-        <p className="mb-2">
-          Можем собирать обезличенные техданные (устройство/браузер/страна) до 6
-          месяцев для антифрода и улучшений.
-        </p>
-        <h4 className="font-semibold mt-4 mb-1">2.4. Cookies и local storage</h4>
-        <p className="mb-2">
-          Используем для языка интерфейса и статуса кошелька. Можно отключить в
-          браузере (часть функций перестанет работать).
+          связываем эти данные между собой и не храним IP-адреса или
+          идентификаторы устройств на стороне Платформы.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">3. Как мы используем данные</h3>
-        <p className="mb-2">
-          Мы не храним средства и не связываем платежи с логином. Временно могут
-          храниться только настройки интерфейса/языка.
+        <h3 style={{ fontSize: 16, marginTop: 12, marginBottom: 4 }}>
+          2.2. История транзакций
+        </h3>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Все операции записываются в публичной сети TON. Управление средствами
+          осуществляется только через ваши кошельки, TonStars не хранит и не
+          контролирует ваши активы.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">4. Передача третьим лицам</h3>
-        <p className="mb-2">
-          Персональные данные не передаются. Операции публичны в TON. По законным
-          запросам возможна передача агрегированной техстатистики.
+        <h3 style={{ fontSize: 16, marginTop: 12, marginBottom: 4 }}>
+          2.3. Анонимная статистика
+        </h3>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Мы можем собирать обезличенные технические данные (тип устройства,
+          браузер, страна, базовые лог-записи) до 6&nbsp;месяцев для защиты от
+          мошенничества и улучшения работы сервиса.
         </p>
 
-        <h3 className="text-xl font-semibold mt-6 mb-2">5. Ваши права</h3>
-        <p className="mb-2">
-          Так как персональные данные не хранятся — запрашивать удаление не
-          требуется. Использование сервиса вы можете прекратить в любой момент.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">6. Сторонние сервисы</h3>
-        <p className="mb-2">
-          Telegram, TON-кошельки (Tonkeeper, MyTonWallet, OpenMask),
-          обозреватели, Vercel, Cloudflare — у каждого своя политика.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">7. Безопасность</h3>
-        <p className="mb-2">
-          Мы применяем техмеры защиты. Платформа non-custodial: безопасность
-          активов зависит от того, как вы храните кошелёк.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">8. Международные передачи</h3>
-        <p className="mb-2">
-          Данные транзакций распределяются по узлам сети TON — это свойство
-          блокчейна.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">9. Изменения</h3>
-        <p className="mb-2">
-          Актуальная версия доступна на этой странице. Дата обновления указана
-          выше.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">10. Контакты</h3>
-        <p>
-          Telegram:{" "}
-          <a href="https://t.me/tonstars_support">@tonstars_support</a> • Сайт:{" "}
-          <a href="https://tonstars.io/">tonstars.io</a>
+        <h3 style={{ fontSize: 16, marginTop: 12, marginBottom: 4 }}>
+          2.4. Cookies и local storage
+        </h3>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Используем cookies и локальное хранилище браузера для сохранения
+          языка интерфейса и статуса подключения кошелька. Вы можете
+          отключить cookies в настройках браузера, но часть функций сервиса
+          может перестать работать.
         </p>
       </section>
 
-      <hr className="border-neutral-700 my-10" />
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>3. Как мы используем данные</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Мы не храним пользовательские средства и не связываем платежи в сети
+          TON с конкретными логинами. Временно могут храниться только настройки
+          интерфейса (например, язык) и технические записи для поддержки и
+          безопасности.
+        </p>
+      </section>
 
-      {/* --- English Version --- */}
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>4. Передача третьим лицам</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Персональные данные в рамках сервиса не передаются третьим лицам.
+          Операции в сети TON являются публичными по природе блокчейна. По
+          законным запросам регуляторов может быть предоставлена обезличенная
+          техническая статистика.
+        </p>
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>5. Ваши права</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Поскольку персонализированные данные почти не обрабатываются и не
+          хранятся на нашей стороне, запросы на удаление обычно не требуются.
+          Вы можете прекратить использование сервиса в любой момент, просто
+          отключив кошелёк и не заходя на сайт.
+        </p>
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>6. Сторонние сервисы</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          При использовании TonStars вы также взаимодействуете со сторонними
+          сервисами: Telegram, TON-кошельки (Tonkeeper, MyTonWallet, OpenMask),
+          TON-обозреватели, инфраструктура хостинга (например, Vercel,
+          Cloudflare). У каждого из этих сервисов своя политика
+          конфиденциальности, с которой вам следует ознакомиться отдельно.
+        </p>
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>7. Безопасность</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Мы применяем технические меры защиты, соответствующие типу сервиса.
+          Платформа работает в non-custodial формате: безопасность активов
+          зависит от того, как вы храните свои кошельки и доступ к ним.
+        </p>
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>8. Международные передачи</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Данные транзакций распределены по нодам сети TON во всём мире — это
+          свойство публичного блокчейна и не контролируется нами централизованно.
+        </p>
+      </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>9. Изменения</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Актуальная версия Политики всегда доступна на этой странице. Дата
+          последнего обновления указана выше. Мы можем обновлять Политику по
+          мере развития сервиса.
+        </p>
+      </section>
+
       <section>
-        <h2 className="text-2xl font-semibold mb-3">
-          Privacy Policy (EN)
-        </h2>
-        <p className="opacity-80 mb-4">Last updated: 01 Jun 2025</p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">1. Introduction</h3>
-        <p className="mb-3">
-          This Policy describes how data is processed when using the{" "}
-          <strong>TonStars</strong> platform. By using the Platform, you agree
-          to its terms.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">2. What Data We Use</h3>
-        <h4 className="font-semibold mt-4 mb-1">2.1. Account Data</h4>
-        <p className="mb-2">
-          Login via Telegram or by connecting a TON wallet is possible. We do
-          not link these data or store IPs/device identifiers.
-        </p>
-        <h4 className="font-semibold mt-4 mb-1">2.2. Transaction History</h4>
-        <p className="mb-2">
-          All operations are recorded on the public TON network. We do not
-          control user funds.
-        </p>
-        <h4 className="font-semibold mt-4 mb-1">2.3. Anonymous Statistics</h4>
-        <p className="mb-2">
-          We may collect anonymized technical data (device/browser/country) for
-          up to 6 months for antifraud and improvements.
-        </p>
-        <h4 className="font-semibold mt-4 mb-1">2.4. Cookies and Local Storage</h4>
-        <p className="mb-2">
-          Used to store interface language and wallet connection status. You can
-          disable cookies in your browser (some functions may stop working).
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">3. How We Use Data</h3>
-        <p className="mb-2">
-          We do not store funds or link payments to login data. Only interface or
-          language preferences may be stored temporarily.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">4. Data Sharing</h3>
-        <p className="mb-2">
-          No personal data is shared. Transactions are public on TON. Aggregated
-          technical data may be shared upon lawful requests.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">5. Your Rights</h3>
-        <p className="mb-2">
-          Since no personal data is stored, deletion requests are unnecessary.
-          You can stop using the service at any time.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">6. Third-Party Services</h3>
-        <p className="mb-2">
-          Telegram, TON wallets (Tonkeeper, MyTonWallet, OpenMask), explorers,
-          Vercel, and Cloudflare each have their own privacy policies.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">7. Security</h3>
-        <p className="mb-2">
-          We apply technical protection measures. The Platform is non-custodial:
-          asset security depends on how you store your wallet.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">8. International Transfers</h3>
-        <p className="mb-2">
-          Transaction data is distributed across TON network nodes — this is an
-          inherent property of blockchain.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">9. Changes</h3>
-        <p className="mb-2">
-          The current version is available on this page. The update date is
-          shown above.
-        </p>
-
-        <h3 className="text-xl font-semibold mt-6 mb-2">10. Contacts</h3>
-        <p>
-          Telegram:{" "}
-          <a href="https://t.me/tonstars_support">@tonstars_support</a> •
-          Website: <a href="https://tonstars.io/">tonstars.io</a>
+        <h2 style={{ fontSize: 20, marginBottom: 8 }}>10. Контакты</h2>
+        <p style={{ opacity: 0.9, lineHeight: 1.6 }}>
+          Telegram: <a href="https://t.me/tonstars_support">@tonstars_support</a>
+          <br />
+          Сайт: <a href="https://www.tonstars.io">tonstars.io</a>
         </p>
       </section>
     </main>
