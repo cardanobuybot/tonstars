@@ -109,7 +109,9 @@ const texts: Record<
 export default function Page() {
   const [lang, setLang] = useState<Lang>('ru');
   const t = texts[lang];
-
+  
+  const numberLocale = lang === 'ru' ? 'ru-RU' : 'en-US';
+  const selectedLabel = lang === 'ru' ? 'Выбрано' : 'Selected';
   // ссылки на политику/условия в зависимости от языка
   const privacyHref = lang === 'ru' ? '/privacy' : '/en/privacy';
   const termsHref = lang === 'ru' ? '/terms' : '/en/terms';
