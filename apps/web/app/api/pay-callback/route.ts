@@ -1,7 +1,6 @@
 // apps/web/app/api/pay-callback/route.ts
 import { NextResponse } from "next/server";
 import { Pool } from "pg";
-import { Resend } from "resend";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -13,25 +12,14 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const ADMIN_NOTIFY_EMAIL =
   process.env.ADMIN_NOTIFY_EMAIL || process.env.ADMIN_EMAIL || "";
 
-// инициализируем Resend, если ключ задан
-const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
-
-type PayCallbackBody = {
-  orderId?: string;
-  order_id?: string;
-  txHash?: string;
-  tx_hash?: string;
-  ton_wallet_addr?: string;
-};
-
 /**
- * Отправка письма о новом оплаченной покупке.
+ * Отправка письма о новом оплаченной покупке через HTTP-запрос к Resend API.
  * Если что-то падает — просто пишем в лог, API-ответ не ломаем.
  */
 async function sendPaidOrderEmail(order: any) {
   try {
-    if (!resend) {
-      console.warn("Resend not configured, skip email");
+    if (!RESEND_API_KEY) {
+      console.warn("RESEND_API_KEY not set, skip email");
       return;
     }
     if (!ADMIN_NOTIFY_EMAIL) {
@@ -57,16 +45,31 @@ async function sendPaidOrderEmail(order: any) {
       `updated_at: ${order.updated_at}`,
     ].filter(Boolean);
 
-    await resend.emails.send({
-      from: "TonStars <notify@tonstars.io>", // тут впиши домен, который верифицируешь в Resend
-      to: [ADMIN_NOTIFY_EMAIL],
-      subject,
-      text: textLines.join("\n"),
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "TonStars <notify@tonstars.io>", // здесь поставь домен, который ты верифицируешь в Resend
+        to: [ADMIN_NOTIFY_EMAIL],
+        subject,
+        text: textLines.join("\n"),
+      }),
     });
   } catch (err) {
     console.error("sendPaidOrderEmail error:", err);
   }
 }
+
+type PayCallbackBody = {
+  orderId?: string;
+  order_id?: string;
+  txHash?: string;
+  tx_hash?: string;
+  ton_wallet_addr?: string;
+};
 
 export async function POST(req: Request) {
   try {
@@ -104,15 +107,13 @@ export async function POST(req: Request) {
 
       // если уже оплачен/доставлен — просто возвращаем ok
       if (order.status === "paid" || order.status === "delivered") {
-        // на всякий случай можем попытаться отправить письмо
+        // можно всё равно попытаться отправить письмо, если его ещё не было
         await sendPaidOrderEmail(order).catch(() => {});
         return NextResponse.json({ ok: true, status: order.status });
       }
 
-      // ⚠️ ПРОВЕРКУ через TonAPI ты можешь вставить здесь, если она у тебя уже была.
-      // Например:
-      // const ok = await verifyWithTonAPI(...);
-      // if (!ok) { return NextResponse.json({ ok: false, error: "TX_NOT_FOUND" }, { status: 400 }); }
+      // ⚠ сюда при желании можно вернуть проверку через TonAPI
+      // (если у тебя была версия с верификацией транзакции)
 
       await client.query("BEGIN");
 
@@ -158,7 +159,7 @@ export async function POST(req: Request) {
       // отправляем письмо об оплаченной покупке
       await sendPaidOrderEmail(updatedOrder).catch(() => {});
 
-      // авто-выдачи звёзд ботом тут уже нет — ты сам решаешь, когда их отправлять
+      // авто-выдачи звёзд ботом больше нет — ты их потом отправляешь сам
       return NextResponse.json({ ok: true, status: "paid" });
     } catch (err) {
       await pool.query("ROLLBACK").catch(() => {});
