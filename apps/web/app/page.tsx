@@ -4,12 +4,19 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   TonConnectButton,
   useTonConnectUI,
-  useTonWallet
+  useTonWallet,
 } from '@tonconnect/ui-react';
 
-// курс: сколько TON за одну звезду
-// меняешь только это число, если захочешь другой курс
-const STAR_TON_RATE = 0.0002;
+// Цена 50 звёзд (TON) с твоей наценкой, берём из env.
+// Например: NEXT_PUBLIC_STAR_PACK_50_TON = 0.4416
+const PACK50_TON_RAW = process.env.NEXT_PUBLIC_STAR_PACK_50_TON || '0.44';
+const PACK50_TON = Number(PACK50_TON_RAW);
+
+// если вдруг env не число – fallback, чтобы не было NaN
+const SAFE_PACK50_TON = Number.isFinite(PACK50_TON) ? PACK50_TON : 0.44;
+
+// сколько TON за одну звезду
+const STAR_TON_RATE = SAFE_PACK50_TON / 50;
 
 // готовые пакеты звёзд, как на Fragment
 const STAR_PACKS = [50, 100, 250, 500, 1000];
@@ -37,8 +44,8 @@ const texts = {
       opening_wallet: 'Открываем кошелёк…',
       waiting_confirm: 'Транзакция отправлена, ждём подтверждения…',
       paid: 'Оплата получена, скоро звёзды будут начислены.',
-      error: 'Ошибка при создании заказа.'
-    }
+      error: 'Ошибка при создании заказа.',
+    },
   },
   en: {
     hero: 'Buy Telegram Stars with TON',
@@ -62,9 +69,9 @@ const texts = {
       opening_wallet: 'Opening wallet…',
       waiting_confirm: 'Transaction sent, waiting for confirmation…',
       paid: 'Payment received, stars will be delivered soon.',
-      error: 'Error while creating order.'
-    }
-  }
+      error: 'Error while creating order.',
+    },
+  },
 };
 
 type Lang = 'ru' | 'en';
@@ -97,17 +104,17 @@ export default function Page() {
   // валидация юзернейма (отрезаем @ перед проверкой)
   const userOk = useMemo(
     () => /^[a-z0-9_]{5,32}$/i.test(username.replace(/^@/, '').trim()),
-    [username]
+    [username],
   );
 
   // количество звёзд определяется выбранным пакетом
   const amountNum = selectedPack;
   const amtOk = amountNum >= 50;
 
-  // считаем сумму в TON
+  // считаем сумму в TON по актуальному (для фронта) курсу
   const amountTon = useMemo(
     () => Number((amountNum * STAR_TON_RATE).toFixed(4)),
-    [amountNum]
+    [amountNum],
   );
 
   // можно покупать, если юзернейм валиден и кошелёк подключён
@@ -120,7 +127,7 @@ export default function Page() {
     async function fetchBalance(addr: string) {
       try {
         const url = `https://toncenter.com/api/v2/getAddressBalance?address=${encodeURIComponent(
-          addr
+          addr,
         )}`;
         const r = await fetch(url);
         const j = await r.json();
@@ -164,8 +171,8 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
-          stars: amountNum
-        })
+          stars: amountNum,
+        }),
       });
 
       const createData = await createRes.json();
@@ -187,10 +194,9 @@ export default function Page() {
         messages: [
           {
             address: toAddress,
-            amount: nanoAmount.toString()
-            // payload можно будет добавить позже, если решим возвращать комментарий
-          }
-        ]
+            amount: nanoAmount.toString(),
+          },
+        ],
       };
 
       const txResult: any = await tonConnectUI.sendTransaction(tx);
@@ -208,8 +214,8 @@ export default function Page() {
         body: JSON.stringify({
           order_id: orderId,
           ton_tx_hash: tonTxBoc,
-          ton_wallet_addr: fromAddr
-        })
+          ton_wallet_addr: fromAddr,
+        }),
       });
 
       const cbData = await cbRes.json();
@@ -244,7 +250,7 @@ export default function Page() {
           marginBottom: 12,
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
         }}
       >
         <div
@@ -252,9 +258,7 @@ export default function Page() {
           style={{ display: 'flex', alignItems: 'center', gap: 10 }}
         >
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div
-            style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}
-          >
+          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
             TonStars
           </div>
         </div>
@@ -273,14 +277,12 @@ export default function Page() {
           lineHeight: 1.1,
           letterSpacing: 0.2,
           textAlign: 'center',
-          maxWidth: 680
+          maxWidth: 680,
         }}
       >
         {t.hero}
       </h1>
-      <div
-        style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}
-      >
+      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>
         {t.sub}
       </div>
 
@@ -293,7 +295,7 @@ export default function Page() {
           boxShadow: '0 10px 40px rgba(15,23,42,0.85)',
           padding: 20,
           maxWidth: 840,
-          margin: '0 auto'
+          margin: '0 auto',
         }}
       >
         <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 14 }}>
@@ -301,9 +303,7 @@ export default function Page() {
         </div>
 
         {/* username */}
-        <label
-          style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
-        >
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
           {t.usernameLabel}
         </label>
         <input
@@ -314,9 +314,7 @@ export default function Page() {
           placeholder={t.usernamePh}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className={
-            username ? (userOk ? 'input-ok' : 'input-err') : undefined
-          }
+          className={username ? (userOk ? 'input-ok' : 'input-err') : undefined}
           style={{
             width: '100%',
             height: 52,
@@ -325,7 +323,7 @@ export default function Page() {
             background: '#020617',
             padding: '0 14px',
             color: '#e6ebff',
-            outline: 'none'
+            outline: 'none',
           }}
         />
         {(!username || !userOk) && (
@@ -339,9 +337,7 @@ export default function Page() {
 
         {/* amount / пакеты */}
         <div style={{ height: 14 }} />
-        <label
-          style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
-        >
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
           {t.amountLabel}
         </label>
 
@@ -350,7 +346,7 @@ export default function Page() {
             display: 'flex',
             flexWrap: 'wrap',
             gap: 8,
-            marginBottom: 6
+            marginBottom: 6,
           }}
         >
           {STAR_PACKS.map((pack) => {
@@ -372,7 +368,7 @@ export default function Page() {
                   color: active ? '#001014' : '#e6ebff',
                   fontWeight: 600,
                   fontSize: 14,
-                  cursor: 'pointer'
+                  cursor: 'pointer',
                 }}
               >
                 {pack.toLocaleString('ru-RU')} Stars
@@ -393,7 +389,7 @@ export default function Page() {
             marginTop: 4,
             marginBottom: 10,
             fontSize: 16,
-            opacity: 0.95
+            opacity: 0.95,
           }}
         >
           <div>{t.toPay}</div>
@@ -407,14 +403,12 @@ export default function Page() {
             marginTop: 4,
             marginBottom: 8,
             fontSize: 16,
-            opacity: 0.85
+            opacity: 0.85,
           }}
         >
           <div>{t.balance}</div>
           <div>
-            {balanceTon == null
-              ? '— TON'
-              : `${balanceTon.toFixed(4)} TON`}
+            {balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}
           </div>
         </div>
 
@@ -428,7 +422,7 @@ export default function Page() {
                 ? '#ff6b6b'
                 : isSuccess
                 ? '#4cd964'
-                : 'rgba(255,255,255,0.8)'
+                : 'rgba(255,255,255,0.8)',
             }}
           >
             {statusText}
@@ -440,9 +434,7 @@ export default function Page() {
         <button
           onClick={onBuy}
           disabled={
-            !canBuy ||
-            status === 'creating' ||
-            status === 'opening_wallet'
+            !canBuy || status === 'creating' || status === 'opening_wallet'
           }
           style={{
             width: '100%',
@@ -450,25 +442,19 @@ export default function Page() {
             borderRadius: 14,
             border: '1px solid rgba(148,163,184,0.4)',
             background:
-              canBuy &&
-              status !== 'creating' &&
-              status !== 'opening_wallet'
+              canBuy && status !== 'creating' && status !== 'opening_wallet'
                 ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
                 : 'rgba(30,41,59,0.8)',
             color:
-              canBuy &&
-              status !== 'creating' &&
-              status !== 'opening_wallet'
+              canBuy && status !== 'creating' && status !== 'opening_wallet'
                 ? '#001014'
                 : 'rgba(226,232,240,0.7)',
             fontSize: 18,
             fontWeight: 800,
             cursor:
-              canBuy &&
-              status !== 'creating' &&
-              status !== 'opening_wallet'
+              canBuy && status !== 'creating' && status !== 'opening_wallet'
                 ? 'pointer'
-                : 'default'
+                : 'default',
           }}
         >
           {t.buy}
@@ -489,7 +475,7 @@ export default function Page() {
           gap: 20,
           flexWrap: 'wrap',
           opacity: 0.9,
-          fontSize: 15
+          fontSize: 15,
         }}
       >
         <div
@@ -502,7 +488,7 @@ export default function Page() {
             padding: '2px 6px',
             borderRadius: 16,
             border: '1px solid rgba(148,163,184,0.4)',
-            transform: 'translateX(-16px)'
+            transform: 'translateX(-16px)',
           }}
         >
           <button
@@ -514,7 +500,7 @@ export default function Page() {
               border: '1px solid rgba(148,163,184,0.5)',
               background: lang === 'ru' ? '#0098ea' : 'transparent',
               color: lang === 'ru' ? '#fff' : '#cdd6f4',
-              fontWeight: 700
+              fontWeight: 700,
             }}
           >
             RU
@@ -528,7 +514,7 @@ export default function Page() {
               border: '1px solid rgba(148,163,184,0.5)',
               background: lang === 'en' ? '#0098ea' : 'transparent',
               color: lang === 'en' ? '#fff' : '#cdd6f4',
-              fontWeight: 700
+              fontWeight: 700,
             }}
           >
             EN
