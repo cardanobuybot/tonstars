@@ -559,13 +559,8 @@ export default function Page() {
           </button>
         </div>
 
-        <a href="/privacy" className="foot-link">
-          {t.policy}
-        </a>
-        <span className="foot-sep">|</span>
-        <a href="/terms" className="foot-link">
-          {t.terms}
-        </a>
+        const privacyHref = lang === 'ru' ? '/privacy' : '/en/privacy';
+const termsHref = lang === 'ru' ? '/terms' : '/en/terms';
         <span className="foot-sep">|</span>
         <span className="foot-mute">{t.yearLine}</span>
       </div>
