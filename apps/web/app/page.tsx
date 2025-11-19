@@ -7,9 +7,23 @@ import {
   useTonWallet
 } from '@tonconnect/ui-react';
 
+// ---- типы ----
+type Lang = 'ru' | 'en';
+type StatusCode =
+  | 'idle'
+  | 'creating'
+  | 'opening_wallet'
+  | 'waiting_confirm'
+  | 'paid'
+  | 'error';
+
 // читаем курс из ENV (Vercel)
-const BASE_RATE = Number(process.env.NEXT_PUBLIC_BASE_STAR_RATE || '0.008556'); // TON за 1 звезду
-const MARKUP_PERCENT = Number(process.env.NEXT_PUBLIC_MARKUP_PERCENT || '3');   // твоя наценка, %
+const BASE_RATE = Number(
+  process.env.NEXT_PUBLIC_BASE_STAR_RATE || '0.008556'
+); // TON за 1 звезду
+const MARKUP_PERCENT = Number(
+  process.env.NEXT_PUBLIC_MARKUP_PERCENT || '3'
+); // твоя наценка, %
 
 const PRICE_PER_STAR = Number(
   (BASE_RATE * (1 + MARKUP_PERCENT / 100)).toFixed(8)
@@ -18,6 +32,7 @@ const PRICE_PER_STAR = Number(
 // готовые пакеты звёзд
 const STAR_PACKS = [50, 100, 250, 500, 1000];
 
+// тексты
 const texts: Record<
   Lang,
   {
@@ -91,18 +106,13 @@ const texts: Record<
   }
 };
 
-type Lang = 'ru' | 'en';
-type StatusCode =
-  | 'idle'
-  | 'creating'
-  | 'opening_wallet'
-  | 'waiting_confirm'
-  | 'paid'
-  | 'error';
-
 export default function Page() {
   const [lang, setLang] = useState<Lang>('ru');
   const t = texts[lang];
+
+  // ссылки на политику/условия в зависимости от языка
+  const privacyHref = lang === 'ru' ? '/privacy' : '/en/privacy';
+  const termsHref = lang === 'ru' ? '/terms' : '/en/terms';
 
   // форма
   const [username, setUsername] = useState('');
@@ -404,7 +414,7 @@ export default function Page() {
         </div>
 
         <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
-          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars
+          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars{' '}
           {' · '}
           1 Star ≈ {PRICE_PER_STAR.toFixed(6)} TON
         </div>
@@ -559,15 +569,13 @@ export default function Page() {
           </button>
         </div>
 
-        const privacyHref = lang === 'ru' ? '/privacy' : '/en/privacy';
-const termsHref = lang === 'ru' ? '/terms' : '/en/terms';
         <a href={privacyHref} className="foot-link">
-  {t.policy}
-</a>
-<span className="foot-sep">|</span>
-<a href={termsHref} className="foot-link">
-  {t.terms}
-</a>
+          {t.policy}
+        </a>
+        <span className="foot-sep">|</span>
+        <a href={termsHref} className="foot-link">
+          {t.terms}
+        </a>
         <span className="foot-sep">|</span>
         <span className="foot-mute">{t.yearLine}</span>
       </div>
