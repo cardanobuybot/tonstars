@@ -1,9 +1,12 @@
 {
   "headers": [
     {
-      "source": "/tonconnect-manifest.json",
+      "source": "/.well-known/tonconnect-manifest.json",
       "headers": [
-        { "key": "Content-Type", "value": "application/json; charset=utf-8" }
+        {
+          "key": "Content-Type",
+          "value": "application/json; charset=utf-8"
+        }
       ]
     }
   ]
