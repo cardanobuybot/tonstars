@@ -1,11 +1,11 @@
 {
   "headers": [
     {
-      "source": "/.well-known/tonconnect-manifest.json",
+      "source": "/\\.well-known/tonconnect-manifest\\.json",
       "headers": [
         {
           "key": "Content-Type",
-          "value": "application/json; charset=utf-8"
+          "value": "application/json"
         }
       ]
     }
