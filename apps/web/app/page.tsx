@@ -45,8 +45,8 @@ const texts = {
   toPay: 'К оплате (TON)',
   balance: 'Баланс (TON)',
   buy: 'Купить Stars',
-  policy: 'Политика конфиденциальности',
-  terms: 'Условия использования',
+  policy: 'Политика',
+  terms: 'Условия',
   yearLine: '© 2025 TonStars',
   status: {
     idle: '',
