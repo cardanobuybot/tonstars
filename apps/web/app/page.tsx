@@ -8,7 +8,6 @@ import {
 } from '@tonconnect/ui-react';
 
 // ---- типы ----
-type Lang = 'ru' | 'en';
 type StatusCode =
   | 'idle'
   | 'creating'
@@ -32,91 +31,39 @@ const PRICE_PER_STAR = Number(
 // готовые пакеты звёзд
 const STAR_PACKS = [50, 100, 250, 500, 1000, 5000];
 
-// тексты
-const texts: Record<
-  Lang,
-  {
-    hero: string;
-    sub: string;
-    buyCardTitle: string;
-    usernameLabel: string;
-    usernamePh: string;
-    usernameHint: string;
-    amountLabel: string;
-    usernameErr: string;
-    amountErr: string;
-    toPay: string;
-    balance: string;
-    buy: string;
-    policy: string;
-    terms: string;
-    yearLine: string;
-    status: Record<StatusCode, string>;
-  }
-> = {
-  ru: {
-    hero: 'Покупай Telegram Stars за TON',
-    sub: 'Быстро. Без KYC. Прозрачно.',
-    buyCardTitle: 'Купить Stars',
-    usernameLabel: 'Telegram юзернейм пользователя:',
-    usernamePh: 'username',
-    usernameHint: 'Можно вводить ник с @ или без — мы обработаем сами.',
-    amountLabel: 'Количество Stars:',
-    usernameErr: 'Ник: латиница/цифры/_ (4–32)',
-    amountErr: 'Минимум 50 звёзд',
-    toPay: 'К оплате (TON)',
-    balance: 'Баланс (TON)',
-    buy: 'Купить Stars',
-    policy: 'Политика',
-    terms: 'Условия',
-    yearLine: '© 2025 TonStars',
-    status: {
-      idle: '',
-      creating: 'Создаём заказ…',
-      opening_wallet: 'Открываем кошелёк…',
-      waiting_confirm: 'Транзакция отправлена, ждём подтверждения…',
-      paid: 'Оплата получена, скоро звёзды будут начислены.',
-      error: 'Ошибка при создании заказа.'
-    }
-  },
-  en: {
-    hero: 'Buy Telegram Stars with TON',
-    sub: 'Fast. No KYC. Transparent.',
-    buyCardTitle: 'Buy Stars',
-    usernameLabel: 'Telegram username:',
-    usernamePh: 'username',
-    usernameHint: 'You can enter it with @ or without — both work.',
-    amountLabel: 'Stars amount:',
-    usernameErr: 'Username: latin/digits/_ (4–32)',
-    amountErr: 'Minimum is 50 stars',
-    toPay: 'To pay (TON)',
-    balance: 'Balance (TON)',
-    buy: 'Buy Stars',
-    policy: 'Privacy',
-    terms: 'Terms',
-    yearLine: '© 2025 TonStars',
-    status: {
-      idle: '',
-      creating: 'Creating order…',
-      opening_wallet: 'Opening wallet…',
-      waiting_confirm: 'Transaction sent, waiting for confirmation…',
-      paid: 'Payment received, stars will be delivered soon.',
-      error: 'Error while creating order.'
-    }
-  }
+// тексты (RU)
+const texts = {
+  hero: 'Покупай Telegram Stars за TON',
+  sub: 'Быстрая ручная выдача, фиксированные пакеты и прозрачная комиссия ~3%.',
+  buyCardTitle: 'Купить Stars',
+  usernameLabel: 'Telegram юзернейм пользователя:',
+  usernamePh: 'username',
+  usernameHint: 'Можно вводить ник с @ или без — мы обработаем сами.',
+  amountLabel: 'Количество Stars:',
+  usernameErr: 'Ник: латиница/цифры/_ (4–32)',
+  amountErr: 'Минимум 50 звёзд',
+  toPay: 'К оплате (TON)',
+  balance: 'Баланс (TON)',
+  buy: 'Купить Stars',
+  policy: 'Политика конфиденциальности',
+  terms: 'Условия использования',
+  yearLine: '© 2025 TonStars',
+  status: {
+    idle: '',
+    creating: 'Создаём заказ…',
+    opening_wallet: 'Открываем кошелёк…',
+    waiting_confirm: 'Транзакция отправлена, ждём подтверждения…',
+    paid: 'Оплата получена, скоро звёзды будут начислены.',
+    error: 'Ошибка при создании заказа.'
+  } as Record<StatusCode, string>
 };
 
 export default function Page() {
-  const [lang, setLang] = useState<Lang>('ru');
-  const t = texts[lang];
+  const t = texts;
 
-  // локаль для форматирования чисел и подпись "Выбрано / Selected"
-  const numberLocale = lang === 'ru' ? 'ru-RU' : 'en-US';
-  const selectedLabel = lang === 'ru' ? 'Выбрано' : 'Selected';
-
-  // ссылки на политику/условия в зависимости от языка
-  const privacyHref = lang === 'ru' ? '/privacy' : '/en/privacy';
-  const termsHref = lang === 'ru' ? '/terms' : '/en/terms';
+  // ссылки на политику/условия (RU)
+  const privacyHref = '/privacy';
+  const termsHref = '/terms';
 
   // форма
   const [username, setUsername] = useState('');
@@ -411,15 +358,14 @@ export default function Page() {
                   cursor: 'pointer'
                 }}
               >
-                {pack.toLocaleString(numberLocale)} Stars
+                {pack.toLocaleString('ru-RU')} Stars
               </button>
             );
           })}
         </div>
 
         <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
-          {selectedLabel}:{' '}
-          {amountNum.toLocaleString(numberLocale)} Stars{' '}
+          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars{' '}
           {' · '}
           1 Star ≈ {PRICE_PER_STAR.toFixed(6)} TON
         </div>
@@ -545,29 +491,31 @@ export default function Page() {
           }}
         >
           <button
-            onClick={() => setLang('ru')}
             aria-label="RU"
             style={{
               padding: '4px 10px',
               borderRadius: 14,
               border: '1px solid rgba(148,163,184,0.5)',
-              background: lang === 'ru' ? '#0098ea' : 'transparent',
-              color: lang === 'ru' ? '#fff' : '#cdd6f4',
+              background: '#0098ea',
+              color: '#fff',
               fontWeight: 700
             }}
           >
             RU
           </button>
           <button
-            onClick={() => setLang('en')}
             aria-label="EN"
+            onClick={() => {
+              window.location.href = '/en';
+            }}
             style={{
               padding: '4px 10px',
               borderRadius: 14,
               border: '1px solid rgba(148,163,184,0.5)',
-              background: lang === 'en' ? '#0098ea' : 'transparent',
-              color: lang === 'en' ? '#fff' : '#cdd6f4',
-              fontWeight: 700
+              background: 'transparent',
+              color: '#cdd6f4',
+              fontWeight: 700,
+              cursor: 'pointer'
             }}
           >
             EN
