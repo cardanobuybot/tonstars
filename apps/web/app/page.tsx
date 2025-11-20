@@ -34,7 +34,7 @@ const STAR_PACKS = [50, 100, 250, 500, 1000, 5000];
 // тексты (RU)
 const texts = {
   hero: 'Покупай Telegram Stars за TON',
-  sub: 'Быстрая ручная выдача, фиксированные пакеты и прозрачная комиссия ~3%.',
+  sub: 'Прозрачная комиссия 3%.',
   buyCardTitle: 'Купить Stars',
   usernameLabel: 'Telegram юзернейм пользователя:',
   usernamePh: 'username',
