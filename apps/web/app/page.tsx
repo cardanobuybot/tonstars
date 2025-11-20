@@ -61,7 +61,6 @@ const texts = {
 export default function Page() {
   const t = texts;
 
-  // ссылки на политику/условия (RU)
   const privacyHref = '/privacy';
   const termsHref = '/terms';
 
@@ -79,17 +78,15 @@ export default function Page() {
   const [balanceTon, setBalanceTon] = useState<number | null>(null);
   const addressFriendly = wallet?.account?.address;
 
-  // валидация юзернейма (4–32, режем @)
+  // валидация юзернейма
   const userOk = useMemo(
     () => /^[a-z0-9_]{4,32}$/i.test(username.replace(/^@/, '').trim()),
     [username]
   );
 
-  // количество звёзд из выбранного пакета
   const amountNum = selectedPack;
   const amtOk = amountNum >= 50;
 
-  // сумма в TON с учётом курса и наценки
   const amountTon = useMemo(
     () => Number((amountNum * PRICE_PER_STAR).toFixed(4)),
     [amountNum]
@@ -97,7 +94,7 @@ export default function Page() {
 
   const canBuy = userOk && !!wallet && amtOk;
 
-  // подтягиваем баланс кошелька
+  // подтягиваем баланс
   useEffect(() => {
     let aborted = false;
 
@@ -129,9 +126,10 @@ export default function Page() {
     };
   }, [addressFriendly]);
 
-  // основной flow покупки
+  // покупка
   const onBuy = async () => {
     if (!canBuy) return;
+
     if (!wallet) {
       setStatus('error');
       setErrorDetails('NO_WALLET');
@@ -142,7 +140,6 @@ export default function Page() {
       setStatus('creating');
       setErrorDetails(null);
 
-      // 1) создаём ордер на бэке
       const createRes = await fetch('/api/order/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -158,14 +155,14 @@ export default function Page() {
         throw new Error(createData?.error || 'ORDER_CREATE_FAILED');
       }
 
-      const orderId: number = createData.order_id;
-      const toAddress: string = createData.to_address;
-      const tonAmount: number = createData.ton_amount;
+      const orderId = createData.order_id;
+      const toAddress = createData.to_address;
+      const tonAmount = createData.ton_amount;
 
       setStatus('opening_wallet');
 
-      // 2) отправляем транзакцию через TonConnect
       const nanoAmount = Math.round(tonAmount * 1e9);
+
       const tx = {
         validUntil: Math.floor(Date.now() / 1000) + 300,
         messages: [
@@ -178,13 +175,11 @@ export default function Page() {
 
       const txResult: any = await tonConnectUI.sendTransaction(tx);
 
-      // если дошли сюда — кошелёк не отменил отправку
       setStatus('waiting_confirm');
 
       const tonTxBoc = txResult?.boc || null;
       const fromAddr = wallet.account.address;
 
-      // 3) дергаем callback, чтобы пометить ордер как paid
       const cbRes = await fetch('/api/pay-callback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -230,22 +225,14 @@ export default function Page() {
           alignItems: 'center'
         }}
       >
-        <div
-          data-hdr-left
-          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/icon-512.png" alt="TonStars" width={36} height={36} />
-          <div
-            style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}
-          >
+          <div style={{ fontWeight: 700, fontSize: 22, whiteSpace: 'nowrap' }}>
             TonStars
           </div>
         </div>
-        <div data-hdr-right>
-          <div data-tc-button>
-            <TonConnectButton />
-          </div>
-        </div>
+
+        <TonConnectButton />
       </div>
 
       {/* HERO */}
@@ -254,16 +241,13 @@ export default function Page() {
           margin: '28px auto 8px',
           fontSize: 36,
           lineHeight: 1.1,
-          letterSpacing: 0.2,
           textAlign: 'center',
           maxWidth: 680
         }}
       >
         {t.hero}
       </h1>
-      <div
-        style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}
-      >
+      <div style={{ opacity: 0.75, marginBottom: 18, textAlign: 'center' }}>
         {t.sub}
       </div>
 
@@ -273,7 +257,6 @@ export default function Page() {
           background: 'linear-gradient(180deg,#0f172a,#020617)',
           border: '1px solid rgba(148,163,184,0.35)',
           borderRadius: 20,
-          boxShadow: '0 10px 40px rgba(15,23,42,0.85)',
           padding: 20,
           maxWidth: 840,
           margin: '0 auto'
@@ -283,23 +266,14 @@ export default function Page() {
           {t.buyCardTitle}
         </div>
 
-        {/* username */}
-        <label
-          style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
-        >
+        {/* USERNAME */}
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
           {t.usernameLabel}
         </label>
         <input
-          inputMode="text"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
           placeholder={t.usernamePh}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
-          className={
-            username ? (userOk ? 'input-ok' : 'input-err') : undefined
-          }
           style={{
             width: '100%',
             height: 52,
@@ -307,35 +281,23 @@ export default function Page() {
             border: '1px solid rgba(148,163,184,0.5)',
             background: '#020617',
             padding: '0 14px',
-            color: '#e6ebff',
-            outline: 'none'
+            color: '#e6ebff'
           }}
         />
+
         {(!username || !userOk) && (
-          <div
-            className={username && !userOk ? 'err' : undefined}
-            style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}
-          >
+          <div style={{ fontSize: 13, opacity: 0.9, marginTop: 8 }}>
             {username ? t.usernameErr : t.usernameHint}
           </div>
         )}
 
-        {/* amount / пакеты */}
+        {/* PACKS */}
         <div style={{ height: 14 }} />
-        <label
-          style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}
-        >
+        <label style={{ display: 'block', marginBottom: 8, opacity: 0.9 }}>
           {t.amountLabel}
         </label>
 
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            marginBottom: 6
-          }}
-        >
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {STAR_PACKS.map((pack) => {
             const active = selectedPack === pack;
             return (
@@ -353,9 +315,7 @@ export default function Page() {
                     ? 'linear-gradient(90deg,#2a86ff,#16e3c9)'
                     : 'rgba(15,23,42,0.9)',
                   color: active ? '#001014' : '#e6ebff',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer'
+                  fontWeight: 600
                 }}
               >
                 {pack.toLocaleString('ru-RU')} Stars
@@ -364,19 +324,17 @@ export default function Page() {
           })}
         </div>
 
-        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
-          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars{' '}
-          {' · '}
-          1 Star ≈ {PRICE_PER_STAR.toFixed(6)} TON
+        <div style={{ fontSize: 13, opacity: 0.8, marginTop: 10 }}>
+          Выбрано: {amountNum.toLocaleString('ru-RU')} Stars · 1 Star ≈{' '}
+          {PRICE_PER_STAR.toFixed(6)} TON
         </div>
 
-        {/* итоги */}
+        {/* PRICE */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            marginTop: 4,
-            marginBottom: 10,
+            marginTop: 10,
             fontSize: 16,
             opacity: 0.95
           }}
@@ -385,35 +343,27 @@ export default function Page() {
           <div>≈ {amountTon.toFixed(4)} TON</div>
         </div>
 
+        {/* BALANCE */}
         <div
           style={{
             display: 'flex',
             justifyContent: 'space-between',
-            marginTop: 4,
-            marginBottom: 8,
+            marginTop: 8,
             fontSize: 16,
             opacity: 0.85
           }}
         >
           <div>{t.balance}</div>
-          <div>
-            {balanceTon == null
-              ? '— TON'
-              : `${balanceTon.toFixed(4)} TON`}
-          </div>
+          <div>{balanceTon == null ? '— TON' : `${balanceTon.toFixed(4)} TON`}</div>
         </div>
 
-        {/* статус процесса */}
+        {/* STATUS */}
         {showStatus && (
           <div
             style={{
               fontSize: 14,
-              marginBottom: 10,
-              color: isError
-                ? '#ff6b6b'
-                : isSuccess
-                ? '#4cd964'
-                : 'rgba(255,255,255,0.8)'
+              marginTop: 10,
+              color: isError ? '#ff6b6b' : isSuccess ? '#4cd964' : '#e6e6e6'
             }}
           >
             {statusText}
@@ -421,18 +371,15 @@ export default function Page() {
           </div>
         )}
 
-        {/* кнопка */}
+        {/* BUTTON */}
         <button
           onClick={onBuy}
-          disabled={
-            !canBuy ||
-            status === 'creating' ||
-            status === 'opening_wallet'
-          }
+          disabled={!canBuy || status === 'creating' || status === 'opening_wallet'}
           style={{
             width: '100%',
             height: 54,
             borderRadius: 14,
+            marginTop: 12,
             border: '1px solid rgba(148,163,184,0.4)',
             background:
               canBuy &&
@@ -445,22 +392,16 @@ export default function Page() {
               status !== 'creating' &&
               status !== 'opening_wallet'
                 ? '#001014'
-                : 'rgba(226,232,240,0.7)',
+                : '#e6e6e6',
             fontSize: 18,
-            fontWeight: 800,
-            cursor:
-              canBuy &&
-              status !== 'creating' &&
-              status !== 'opening_wallet'
-                ? 'pointer'
-                : 'default'
+            fontWeight: 800
           }}
         >
           {t.buy}
         </button>
       </div>
 
-      {/* BOTTOM BAR */}
+      {/* FOOTER */}
       <div
         className="bottom-bar"
         style={{
@@ -469,25 +410,23 @@ export default function Page() {
           paddingTop: 16,
           borderTop: '1px solid rgba(148,163,184,0.35)',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
           gap: 20,
+          justifyContent: 'center',
           flexWrap: 'wrap',
-          opacity: 0.9,
-          fontSize: 15
+          fontSize: 15,
+          opacity: 0.9
         }}
       >
+        {/* Language switch */}
         <div
           className="lang-pill"
           style={{
             display: 'inline-flex',
-            alignItems: 'center',
             gap: 6,
             background: '#020617',
             padding: '2px 6px',
             borderRadius: 16,
-            border: '1px solid rgba(148,163,184,0.4)',
-            transform: 'translateX(-16px)'
+            border: '1px solid rgba(148,163,184,0.4)'
           }}
         >
           <button
@@ -503,11 +442,10 @@ export default function Page() {
           >
             RU
           </button>
-          <button
+
+          <a
+            href="/en"
             aria-label="EN"
-            onClick={() => {
-              window.location.href = '/en';
-            }}
             style={{
               padding: '4px 10px',
               borderRadius: 14,
@@ -515,21 +453,23 @@ export default function Page() {
               background: 'transparent',
               color: '#cdd6f4',
               fontWeight: 700,
-              cursor: 'pointer'
+              textDecoration: 'none'
             }}
           >
             EN
-          </button>
+          </a>
         </div>
 
-        <a href={privacyHref} className="foot-link">
-          {t.policy}
-        </a>
+        <a href="/privacy" className="foot-link">Политика</a>
         <span className="foot-sep">|</span>
-        <a href={termsHref} className="foot-link">
-          {t.terms}
-        </a>
+
+        <a href="/terms" className="foot-link">Условия</a>
         <span className="foot-sep">|</span>
+
+        {/* ★ Новый пункт: блог/FAQ */}
+        <a href="/blog" className="foot-link">FAQ / Блог</a>
+        <span className="foot-sep">|</span>
+
         <span className="foot-mute">{t.yearLine}</span>
       </div>
     </div>
