@@ -1,6 +1,7 @@
 import './globals.css';
 import React from 'react';
 import TonConnectProvider from './providers/TonConnectProvider';
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata = {
   title: 'TonStars',
@@ -25,6 +26,7 @@ export default function RootLayout({
       </head>
       <body>
         <TonConnectProvider>{children}</TonConnectProvider>
+        <SpeedInsights />
       </body>
     </html>
   );
