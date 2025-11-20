@@ -1,8 +1,6 @@
-'use client';
-
 import './globals.css';
 import React from 'react';
-import { TonConnectUIProvider } from '@tonconnect/ui-react';
+import TonConnectProvider from './providers/TonConnectProvider';
 
 export const metadata = {
   title: 'TonStars',
@@ -26,9 +24,7 @@ export default function RootLayout({
         <title>TonStars</title>
       </head>
       <body>
-        <TonConnectUIProvider manifestUrl="https://tonstars.io/tonconnect-manifest.json">
-          {children}
-        </TonConnectUIProvider>
+        <TonConnectProvider>{children}</TonConnectProvider>
       </body>
     </html>
   );
