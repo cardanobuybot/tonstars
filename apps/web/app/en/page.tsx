@@ -30,7 +30,7 @@ const STAR_PACKS = [50, 100, 250, 500, 1000, 5000];
 
 const texts = {
   hero: 'Buy Telegram Stars with TON',
-  sub: 'Fast manual delivery, fixed packs and transparent ~3% fee.',
+  sub: 'Transparent 3% fee.',
   buyCardTitle: 'Buy Stars',
   usernameLabel: 'Telegram username:',
   usernamePh: 'username',
