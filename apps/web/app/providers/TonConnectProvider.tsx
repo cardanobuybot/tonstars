@@ -5,11 +5,7 @@ import { TonConnectUIProvider } from '@tonconnect/ui-react';
 
 const manifestUrl = 'https://tonstars.io/.well-known/tonconnect-manifest.json';
 
-export default function TonConnectProvider({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function TonConnectProvider({ children }: { children: ReactNode }) {
   return (
     <TonConnectUIProvider manifestUrl={manifestUrl}>
       {children}
