@@ -509,10 +509,18 @@ export default function EnPage() {
           {t.policy}
         </a>
         <span className="foot-sep">|</span>
+
         <a href={termsHref} className="foot-link">
           {t.terms}
         </a>
         <span className="foot-sep">|</span>
+
+        {/* Новый пункт: FAQ / Blog */}
+        <a href="/en/blog" className="foot-link">
+          FAQ / Blog
+        </a>
+        <span className="foot-sep">|</span>
+
         <span className="foot-mute">{t.yearLine}</span>
       </div>
     </div>
